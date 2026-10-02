@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 import { interpretTransaction, validateInterpretation } from "./lib/transaction";
 
 const transactions = [
@@ -14,11 +17,64 @@ const navItems = [
   { label: "Settings", icon: "⚙", active: false },
 ];
 
+type Session = { access_token: string; user: { id: string; email?: string } };
+
+async function authRequest(path: string, body: Record<string, string>) {
+  const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.msg || data.error_description || data.error || "Authentication failed.");
+  return data as Session;
+}
+
 export default function App() {
+  const [session, setSession] = useState<Session | null>(() => {
+    const saved = localStorage.getItem("z30_session");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
   const [input, setInput] = useState("");
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    if (session) localStorage.setItem("z30_session", JSON.stringify(session));
+    else localStorage.removeItem("z30_session");
+  }, [session]);
+
+  async function signIn() {
+    try {
+      const next = await authRequest("token?grant_type=password", { email: email.trim(), password });
+      setSession(next);
+      setAuthMessage("Signed in.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Unable to sign in.");
+    }
+  }
+
+  async function signUp() {
+    try {
+      await authRequest("signup", { email: email.trim(), password });
+      setAuthMessage("Account created. Check your email if confirmation is required.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Unable to create account.");
+    }
+  }
+
+  function signOut() {
+    setSession(null);
+  }
+
   function submit() {
+    if (!session) {
+      setMessage("Sign in first to record this.");
+      return;
+    }
+
     const result = interpretTransaction(input);
     const validation = validateInterpretation(result);
 
@@ -33,6 +89,33 @@ export default function App() {
     setInput("");
   }
 
+  if (!session) {
+    return (
+      <main className="app-shell">
+        <section className="phone-frame">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">ZERO BEFORE 30</p>
+              <h1>Your money, understood.</h1>
+            </div>
+          </header>
+          <section className="capture-section auth-card">
+            <p className="section-label">YOUR ACCOUNT</p>
+            <h2>Start with your money.</h2>
+            <p className="muted">Create your private Z30 account or sign in.</p>
+            <input className="auth-input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input className="auth-input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="auth-actions">
+              <button className="primary-button" onClick={signIn}>Sign in</button>
+              <button className="secondary-button" onClick={signUp}>Create account</button>
+            </div>
+            {authMessage && <p className="interpreter-message">{authMessage}</p>}
+          </section>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="phone-frame" aria-label="Zero Before 30 home">
@@ -41,7 +124,7 @@ export default function App() {
             <p className="eyebrow">ZERO BEFORE 30</p>
             <h1>Your money, understood.</h1>
           </div>
-          <button className="avatar-button" aria-label="Open profile">AH</button>
+          <button className="avatar-button" aria-label="Sign out" onClick={signOut}>AH</button>
         </header>
 
         <section className="balance-card">
