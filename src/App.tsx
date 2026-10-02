@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { interpretTransaction, validateInterpretation } from "./lib/transaction";
+
 const transactions = [
   { label: "Petrol", amount: "Rs 450" },
   { label: "Lunch", amount: "Rs 800" },
@@ -12,6 +15,24 @@ const navItems = [
 ];
 
 export default function App() {
+  const [input, setInput] = useState("");
+  const [message, setMessage] = useState("");
+
+  function submit() {
+    const result = interpretTransaction(input);
+    const validation = validateInterpretation(result);
+
+    if (!validation.valid) {
+      setMessage(validation.reason ?? "I need more information.");
+      return;
+    }
+
+    setMessage(
+      `Understood: ${result.description} — Rs ${result.amount} — ${result.account}.`,
+    );
+    setInput("");
+  }
+
   return (
     <main className="app-shell">
       <section className="phone-frame" aria-label="Zero Before 30 home">
@@ -20,9 +41,7 @@ export default function App() {
             <p className="eyebrow">ZERO BEFORE 30</p>
             <h1>Your money, understood.</h1>
           </div>
-          <button className="avatar-button" aria-label="Open profile">
-            AH
-          </button>
+          <button className="avatar-button" aria-label="Open profile">AH</button>
         </header>
 
         <section className="balance-card">
@@ -40,10 +59,26 @@ export default function App() {
             <input
               aria-label="Tell Z30 about your money"
               placeholder="Tell me about your money..."
+              value={input}
+              onChange={(event) => {
+                setInput(event.target.value);
+                setMessage("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submit();
+              }}
             />
-            <button className="send-button" aria-label="Send transaction">↑</button>
+            <button
+              className="send-button"
+              aria-label="Send transaction"
+              onClick={submit}
+              disabled={!input.trim()}
+            >
+              ↑
+            </button>
           </div>
           <p className="hint">Try “petrol 450 cash”</p>
+          {message && <p className="interpreter-message">{message}</p>}
         </section>
 
         <section className="today-section">
