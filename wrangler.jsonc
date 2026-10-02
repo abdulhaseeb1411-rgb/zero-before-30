@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "zero-before-30",
+  "name": "z30-webhook",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-03",
   "assets": {
