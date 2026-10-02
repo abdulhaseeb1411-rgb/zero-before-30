@@ -40,6 +40,7 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [input, setInput] = useState("");
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (session) localStorage.setItem("z30_session", JSON.stringify(session));
@@ -83,10 +84,32 @@ export default function App() {
       return;
     }
 
-    setMessage(
-      `Understood: ${result.description} — Rs ${result.amount} — ${result.account}.`,
-    );
-    setInput("");
+    setSending(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + session.access_token,
+          "X-Client-Request-Id": crypto.randomUUID(),
+        },
+        body: JSON.stringify({ input: input.trim() }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(body.clarification_reason || body.error || "Unable to record this.");
+        return;
+      }
+      setMessage(
+        "Recorded: " + body.interpretation.description + " — Rs " + body.interpretation.amount + ".",
+      );
+      setInput("");
+    } catch {
+      setMessage("Z30 API is not connected yet.");
+    } finally {
+      setSending(false);
+    }
   }
 
   if (!session) {
@@ -155,9 +178,9 @@ export default function App() {
               className="send-button"
               aria-label="Send transaction"
               onClick={submit}
-              disabled={!input.trim()}
+              disabled={!input.trim() || sending}
             >
-              ↑
+              {sending ? "…" : "↑"}
             </button>
           </div>
           <p className="hint">Try “petrol 450 cash”</p>
