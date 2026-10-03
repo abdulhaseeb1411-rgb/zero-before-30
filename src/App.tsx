@@ -27,8 +27,20 @@ async function authRequest(path: string, body: Record<string, string>) {
     headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
     body: JSON.stringify(body),
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.msg || data.error_description || data.error || "Authentication failed.");
+  const raw = await response.text();
+  let data: Record<string, unknown> = {};
+  if (raw.trim()) {
+    try {
+      data = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      if (!response.ok) throw new Error("Authentication service returned an invalid response.");
+    }
+  }
+  if (!response.ok) {
+    throw new Error(
+      String(data.msg || data.error_description || data.error || "Authentication failed.")
+    );
+  }
   return data as Session;
 }
 
