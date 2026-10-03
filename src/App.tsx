@@ -25,7 +25,7 @@ async function authRequest(path: string, body: Record<string, string>) {
   const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...(path === "signup" ? { options: { email_redirect_to: window.location.origin } } : {}) }),
   });
   const raw = await response.text();
   let data: Record<string, unknown> = {};
