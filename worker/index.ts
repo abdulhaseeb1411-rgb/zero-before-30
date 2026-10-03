@@ -1,7 +1,6 @@
 import { interpretTransaction, validateInterpretation } from "../src/lib/transaction";
 
-type Env = {
-  ASSETS: Fetcher;
+type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
 };
