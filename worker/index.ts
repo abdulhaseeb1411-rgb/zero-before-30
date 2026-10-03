@@ -44,6 +44,32 @@ async function getUser(env: Env, token: string): Promise<SupabaseUser | null> {
   return (await response.json()) as SupabaseUser;
 }
 
+async function listTransactions(env: Env, token: string, userId: string) {
+  const params = new URLSearchParams({
+    select: "id,type,amount,currency,description,transaction_date,created_at",
+    user_id: "eq." + userId,
+    status: "eq.active",
+    order: "created_at.desc",
+    limit: "25",
+  });
+  const response = await supabaseRequest(env, "/rest/v1/transactions?" + params.toString(), token);
+  if (!response.ok) throw new Error("Unable to load transactions.");
+  return await response.json();
+}
+
+async function handleListTransactions(request: Request, env: Env) {
+  const token = bearerToken(request);
+  if (!token) return json({ error: "Authentication required." }, 401);
+  const user = await getUser(env, token);
+  if (!user?.id) return json({ error: "Invalid or expired session." }, 401);
+  try {
+    const transactions = await listTransactions(env, token, user.id);
+    return json({ ok: true, transactions });
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Unable to load transactions." }, 500);
+  }
+}
+
 async function findAccount(env: Env, token: string, userId: string, name: string) {
   const params = new URLSearchParams({
     select: "id,name,type,currency,is_active",
@@ -82,13 +108,17 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
   const categories = await response.json() as Array<{ id: string; name: string; kind: "expense" | "income" }>;
   const text = description.toLowerCase();
   const aliases = kind === "expense"
-    ? [[["petrol","fuel","diesel"],["transport","fuel"]], [["grocery","groceries","eggs","naan","food"],["groceries","food"]], [["lunch","dinner","breakfast","restaurant","meal"],["food","dining"]], [["medicine","doctor","hospital","pharmacy"],["health","medical"]]]
-    : [[["salary","paycheck","wage"],["salary","income"]]];
-  for (const pair of aliases) {
-    const terms = pair[0] as string[];
-    const names = pair[1] as string[];
-    if (terms.some((term) => text.includes(term))) {
-      const match = categories.find((category) => names.some((name) => category.name.toLowerCase() === name));
+    ? [
+        { terms: ["petrol", "fuel", "diesel"], names: ["transport"] },
+        { terms: ["grocery", "groceries", "eggs", "naan"], names: ["groceries"] },
+        { terms: ["lunch", "dinner", "breakfast", "restaurant", "meal", "food"], names: ["food & dining"] },
+        { terms: ["medicine", "doctor", "hospital", "pharmacy"], names: ["health"] },
+        { terms: ["electricity", "gas bill", "water bill", "internet", "mobile"], names: ["bills & utilities"] },
+      ]
+    : [{ terms: ["salary", "paycheck", "wage"], names: ["salary"] }];
+  for (const alias of aliases) {
+    if (alias.terms.some((term) => text.includes(term))) {
+      const match = categories.find((category) => alias.names.includes(category.name.toLowerCase()));
       if (match) return match;
     }
   }
@@ -157,6 +187,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
     if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api" });
+    if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
     return env.ASSETS.fetch(request);
