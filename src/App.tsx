@@ -110,6 +110,31 @@ export default function App() {
     }
   }
 
+  async function resendConfirmation() {
+    try {
+      const response = await fetch(SUPABASE_URL + "/auth/v1/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+        body: JSON.stringify({
+          type: "signup",
+          email: email.trim(),
+          options: { email_redirect_to: window.location.origin },
+        }),
+      });
+      const raw = await response.text();
+      let data: Record<string, unknown> = {};
+      if (raw.trim()) {
+        try { data = JSON.parse(raw) as Record<string, unknown>; } catch {}
+      }
+      if (!response.ok) {
+        throw new Error(String(data.msg || data.error_description || data.error || "Unable to resend confirmation email."));
+      }
+      setAuthMessage("A fresh confirmation email has been sent. Use the newest email.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Unable to resend confirmation email.");
+    }
+  }
+
   function signOut() {
     setSession(null);
     setMessage("");
@@ -164,6 +189,9 @@ export default function App() {
               <button className="primary-button" onClick={signIn}>Sign in</button>
               <button className="secondary-button" onClick={signUp}>Create account</button>
             </div>
+            <button className="secondary-button" onClick={() => void resendConfirmation()} disabled={!email.trim()}>
+              Resend confirmation email
+            </button>
             {authMessage && <p className="interpreter-message">{authMessage}</p>}
           </section>
         </section>
