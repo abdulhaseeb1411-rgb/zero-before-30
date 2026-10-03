@@ -72,7 +72,12 @@ export default function App() {
       const response = await fetch("/api/transactions", {
         headers: { Authorization: "Bearer " + currentSession.access_token },
       });
-      const body = await response.json();
+      const raw = await response.text();
+      let body: { error?: string; transactions?: Transaction[] } = {};
+      if (raw.trim()) {
+        try { body = JSON.parse(raw) as typeof body; }
+        catch { throw new Error("Transaction service returned an invalid response."); }
+      }
       if (!response.ok) throw new Error(body.error || "Unable to load transactions.");
       setTransactions(body.transactions ?? []);
     } catch (error) {
