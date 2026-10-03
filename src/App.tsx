@@ -2,13 +2,6 @@ import { useEffect, useState } from "react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-import { interpretTransaction, validateInterpretation } from "./lib/transaction";
-
-const transactions = [
-  { label: "Petrol", amount: "Rs 450" },
-  { label: "Lunch", amount: "Rs 800" },
-  { label: "Eggs + naan", amount: "Rs 200" },
-];
 
 const navItems = [
   { label: "Home", icon: "⌂", active: true },
@@ -18,6 +11,15 @@ const navItems = [
 ];
 
 type Session = { access_token: string; user: { id: string; email?: string } };
+type Transaction = {
+  id: string;
+  type: string;
+  amount: number;
+  currency: string;
+  description: string | null;
+  transaction_date: string;
+  created_at: string;
+};
 
 async function authRequest(path: string, body: Record<string, string>) {
   const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
@@ -41,10 +43,35 @@ export default function App() {
   const [input, setInput] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   useEffect(() => {
     if (session) localStorage.setItem("z30_session", JSON.stringify(session));
-    else localStorage.removeItem("z30_session");
+    else {
+      localStorage.removeItem("z30_session");
+      setTransactions([]);
+    }
+  }, [session]);
+
+  async function loadTransactions(currentSession: Session) {
+    setLoadingTransactions(true);
+    try {
+      const response = await fetch("/api/transactions", {
+        headers: { Authorization: "Bearer " + currentSession.access_token },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to load transactions.");
+      setTransactions(body.transactions ?? []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to load transactions.");
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }
+
+  useEffect(() => {
+    if (session) void loadTransactions(session);
   }, [session]);
 
   async function signIn() {
@@ -68,22 +95,11 @@ export default function App() {
 
   function signOut() {
     setSession(null);
+    setMessage("");
   }
 
-  function submit() {
-    if (!session) {
-      setMessage("Sign in first to record this.");
-      return;
-    }
-
-    const result = interpretTransaction(input);
-    const validation = validateInterpretation(result);
-
-    if (!validation.valid) {
-      setMessage(validation.reason ?? "I need more information.");
-      return;
-    }
-
+  async function submit() {
+    if (!session || !input.trim() || sending) return;
     setSending(true);
     setMessage("");
     try {
@@ -101,12 +117,11 @@ export default function App() {
         setMessage(body.clarification_reason || body.error || "Unable to record this.");
         return;
       }
-      setMessage(
-        "Recorded: " + body.interpretation.description + " — Rs " + body.interpretation.amount + ".",
-      );
+      setMessage("Recorded: " + body.interpretation.description + " — Rs " + body.interpretation.amount + ".");
       setInput("");
+      await loadTransactions(session);
     } catch {
-      setMessage("Z30 API is not connected yet.");
+      setMessage("Z30 could not reach the transaction service. Please try again.");
     } finally {
       setSending(false);
     }
@@ -152,9 +167,9 @@ export default function App() {
 
         <section className="balance-card">
           <div>
-            <p className="section-label">SEPTEMBER</p>
-            <p className="balance">Rs 76,500</p>
-            <p className="muted">remaining</p>
+            <p className="section-label">YOUR MONEY</p>
+            <p className="balance">Rs 0</p>
+            <p className="muted">balance summary coming next</p>
           </div>
           <span className="balance-mark" aria-hidden="true">↗</span>
         </section>
@@ -171,15 +186,10 @@ export default function App() {
                 setMessage("");
               }}
               onKeyDown={(event) => {
-                if (event.key === "Enter") submit();
+                if (event.key === "Enter") void submit();
               }}
             />
-            <button
-              className="send-button"
-              aria-label="Send transaction"
-              onClick={submit}
-              disabled={!input.trim() || sending}
-            >
+            <button className="send-button" aria-label="Send transaction" onClick={() => void submit()} disabled={!input.trim() || sending}>
               {sending ? "…" : "↑"}
             </button>
           </div>
@@ -189,21 +199,24 @@ export default function App() {
 
         <section className="today-section">
           <div className="section-heading">
-            <h2>Today</h2>
-            <span>3 entries</span>
+            <h2>Recent transactions</h2>
+            <span>{transactions.length} entries</span>
           </div>
-
           <div className="transaction-list">
+            {loadingTransactions && <p className="muted">Loading transactions…</p>}
+            {!loadingTransactions && transactions.length === 0 && <p className="muted">Your recorded transactions will appear here.</p>}
             {transactions.map((transaction) => (
-              <article className="transaction" key={transaction.label}>
+              <article className="transaction" key={transaction.id}>
                 <div className="transaction-icon" aria-hidden="true">
-                  {transaction.label === "Petrol" ? "P" : transaction.label === "Lunch" ? "L" : "E"}
+                  {(transaction.description || "T").slice(0, 1).toUpperCase()}
                 </div>
                 <div className="transaction-copy">
-                  <strong>{transaction.label}</strong>
-                  <span>Expense</span>
+                  <strong>{transaction.description || "Transaction"}</strong>
+                  <span>{transaction.type} · {transaction.transaction_date}</span>
                 </div>
-                <strong className="transaction-amount">− {transaction.amount}</strong>
+                <strong className="transaction-amount">
+                  {transaction.type === "income" ? "+" : "−"} {transaction.currency} {Number(transaction.amount).toLocaleString("en-PK")}
+                </strong>
               </article>
             ))}
           </div>
@@ -211,7 +224,7 @@ export default function App() {
 
         <nav className="bottom-nav" aria-label="Main navigation">
           {navItems.map((item) => (
-            <button className={item.active ? "nav-item active" : "nav-item"} key={item.label}>
+            <button className={item.active ? "nav-item active" : "nav-item"} key={item.label} type="button">
               <span className="nav-icon" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
             </button>
