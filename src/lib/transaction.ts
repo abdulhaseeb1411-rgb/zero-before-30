@@ -30,7 +30,7 @@ const accountAliases: Array<{ pattern: RegExp; account: string }> = [
   { pattern: /\b(?:meezan)\s*(?:cc|credit\s*card|card)?\b/i, account: "Meezan" },
   { pattern: /\b(?:ubl|united bank)\s*(?:cc|credit\s*card|card)\b/i, account: "UBL Credit Card" },
   { pattern: /\b(?:js|js bank)\s*(?:cc|credit\s*card|card)\b/i, account: "JS Bank Credit Card" },
-  { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "CARD_GENERIC" },
+  { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "Credit Card" },
   { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
 ];
 
@@ -58,7 +58,7 @@ function resolveAccount(text: string) {
   // In phrases such as "cash nahi tha isliye alfalah cc pe", "cash" is
   // negated, so it must not override the explicit Alfalah credit card.
   const namedAccount = accountAliases
-    .filter(({ account }) => account !== "Cash" && account !== "CARD_GENERIC")
+    .filter(({ account }) => account !== "Cash" && account !== "Credit Card")
     .find(({ pattern }) => pattern.test(text));
   if (namedAccount) return namedAccount.account;
 
@@ -66,7 +66,7 @@ function resolveAccount(text: string) {
     || /\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b[^.!?]{0,20}\bcash\b/i.test(text);
   if (!hasNegatedCash && /\\bcash\\b/i.test(text)) return "Cash";
 
-  return accountAliases.find(({ pattern, account }) => account === "CARD_GENERIC" && pattern.test(text))?.account ?? null;
+  return accountAliases.find(({ pattern, account }) => account === "Credit Card" && pattern.test(text))?.account ?? null;
 }
 
 function parseDateOffset(text: string): number {
