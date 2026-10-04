@@ -103,27 +103,10 @@ function timeRanges(text: string) {
 }
 
 function numberFromToken(text: string, index: number, token: string) {
-  const before = text.slice(Math.max(0, index - 20), index);
-  if (/\b(?:hazar|hazaar|thousand|k)\s*$/i.test(before)) return Number(token) * 1000;
-  if (/\b(?:lakh|lac|lacs)\s*$/i.test(before)) return Number(token) * 100000;
+  const after = text.slice(index + token.length, index + token.length + 15);
+  if (/^\s*(?:hazar|hazaar|thousand|k)\b/i.test(after)) return Number(token) * 1000;
+  if (/^\s*(?:lakh|lac|lacs)\b/i.test(after)) return Number(token) * 100000;
   return Number(token);
-}
-
-function extractAmount(text: string) {
-  const ranges = timeRanges(text);
-  const candidates = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)]
-    .filter((match) => {
-      const index = match.index ?? 0;
-      return !ranges.some(([start, end]) => index >= start && index < end);
-    })
-    .map((match) => ({
-      raw: match[0],
-      index: match.index ?? 0,
-      amount: numberFromToken(text, match.index ?? 0, match[0]),
-    }))
-    .filter((candidate) => candidate.amount > 0);
-
-  return candidates[0] ?? null;
 }
 
 function cleanDescription(text: string, account: string | null) {
@@ -134,7 +117,8 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
-    .replace(/\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/gi, " ");
+    .replace(/\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/gi, " ")
+    .replace(/\b(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\b/gi, " ");
 
   for (const alias of accountAliases) {
     description = description.replace(alias.pattern, " ");
@@ -190,20 +174,18 @@ export function interpretTransaction(input: string): Interpretation {
       return !ranges.some(([start, end]) => index >= start && index < end);
     });
 
-  const amountMatch = amountCandidates.length ? amountCandidates[0] : null;
-  const amount = amountMatch
-    ? numberFromToken(text, amountMatch.index ?? 0, amountMatch[0])
-    : null;
+  if (amountCandidates.length > 1) {
+    return clarification("I found more than one amount. I need to know whether this is one transaction or multiple transactions.");
+  }
+
+  const amountMatch = amountCandidates[0] ?? null;
+  const amount = amountMatch ? numberFromToken(text, amountMatch.index ?? 0, amountMatch[0]) : null;
 
   const account = resolveAccount(text);
   const transaction_time = parseTime(text);
   const salary_deduction = isSalaryDeduction(text);
 
   if (!amount) return clarification("I need a valid amount.");
-
-  if (amountCandidates.length > 1) {
-    return clarification("I found more than one amount. I need to know whether this is one transaction or multiple transactions.");
-  }
 
   const description = cleanDescription(text, account);
   if (!description) return clarification("I need a description of what you paid for.");
