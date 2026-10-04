@@ -46,6 +46,9 @@ function hasComplexFinancialMeaning(text: string) {
     /\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i,
     /\b(?:pehle|previously|already)\s+(?:diye|pay|paid)\b/i,
     /\b(?:split|baqi|remaining|aur\s+baqi)\b/i,
+    /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:wapas|return|deni\s+hai|dena\s+hai|denge|dega|degi|milna\s+hai)\b/i,
+    /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|wapas|return)\b/i,
+    /\b(?:mile|mila|milay)\b.*\b(?:wapas\s+kar(?:na|ni)|return\s+kar(?:na|ni)|dena\s+hai|deni\s+hai)\b/i,
   ].some((pattern) => pattern.test(text));
 }
 
