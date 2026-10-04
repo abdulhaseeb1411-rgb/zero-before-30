@@ -158,6 +158,7 @@ export default function App() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         setMessage(body.clarification_reason || body.error || "Unable to record this.");
+        setInput("");
         return;
       }
       setMessage("Recorded: " + body.interpretation.description + " — Rs " + body.interpretation.amount + ".");
