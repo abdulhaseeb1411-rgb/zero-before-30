@@ -22,3 +22,11 @@ jobs:
         run: npm run build
       - name: Run transaction benchmark
         run: npm run benchmark
+
+      - name: Upload transaction benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transaction-benchmark-report
+          path: benchmark-result.json
+          if-no-files-found: ignore

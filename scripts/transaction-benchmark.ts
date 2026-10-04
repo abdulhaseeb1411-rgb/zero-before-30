@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { interpretTransaction } from "../src/lib/transaction.ts";
 
 type Expectation = {
@@ -40,5 +41,7 @@ for (const test of cases) {
   }
 }
 
+const report = { passed, total: cases.length, results: cases.map(test => ({ label: test.label, input: test.input, interpretation: interpretTransaction(test.input) })) };
+writeFileSync("benchmark-result.json", JSON.stringify(report, null, 2));
 console.log(`Benchmark: ${passed}/${cases.length}`);
 if (passed !== cases.length) process.exit(1);
