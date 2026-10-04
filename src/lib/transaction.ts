@@ -15,6 +15,7 @@ export type Interpretation = {
   currency: string | null;
   description: string | null;
   account: string | null;
+  transaction_time: string | null;
   confidence: number;
   needs_clarification: boolean;
   clarification_reason: string | null;
@@ -33,10 +34,31 @@ function resolveAccount(text: string) {
   return accountAliases.find(({ pattern }) => pattern.test(text))?.account ?? null;
 }
 
+function parseTime(text: string): string | null {
+  const match = text.match(/\b(?:on|at)\s+(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?\b/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = match[2] ? Number(match[2]) : 0;
+  const meridiem = match[3]?.toLowerCase() ?? null;
+
+  if (minute > 59) return null;
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === "pm" && hour !== 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+  } else if (hour > 23) {
+    return null;
+  }
+
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+
 function cleanDescription(text: string, account: string | null) {
   let description = text
     .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
-    .replace(/\b\d+(?:\.\d+)?\b/g, " ")
+    .replace(/\b\d+(?:\.\d+)?\b/g, " ")\n    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::?\d{2})?\s*(?:am|pm)?\b/gi, " ")
     .trim();
 
   for (const alias of accountAliases) {
@@ -61,6 +83,7 @@ export function interpretTransaction(input: string): Interpretation {
       currency: "PKR",
       description: "Salary",
       account: null,
+      transaction_time: null,
       confidence: 0.99,
       needs_clarification: false,
       clarification_reason: null,
@@ -70,8 +93,7 @@ export function interpretTransaction(input: string): Interpretation {
   const amountMatch = text.match(/(?:^|\s)(\d+(?:\.\d+)?)(?=\s|$)/);
   if (amountMatch) {
     const amount = Number(amountMatch[1]);
-    const account = resolveAccount(text);
-    const description = cleanDescription(text, account);
+    const account = resolveAccount(text);\n    const transaction_time = parseTime(text);\n    const description = cleanDescription(text, account);
 
     if (description) {
       return {
@@ -80,6 +102,7 @@ export function interpretTransaction(input: string): Interpretation {
         currency: "PKR",
         description,
         account,
+        transaction_time,
         confidence: account ? 0.99 : 0.92,
         needs_clarification: !account,
         clarification_reason: account ? null : "How did you pay?",
@@ -93,6 +116,7 @@ export function interpretTransaction(input: string): Interpretation {
     currency: null,
     description: null,
     account: null,
+    transaction_time: null,
     confidence: 0,
     needs_clarification: true,
     clarification_reason: "I need a little more detail to record this.",
