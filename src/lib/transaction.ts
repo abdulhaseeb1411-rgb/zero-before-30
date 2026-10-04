@@ -41,24 +41,48 @@ function resolveAccount(text: string) {
 }
 
 function parseTime(text: string): string | null {
-  const match = text.match(/\b(?:on|at)\s+(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?\b/i);
+  const match =
+    text.match(/\b(?:on|at)\s+(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?\b/i) ??
+    text.match(/\b(\d{1,2})(?::(\d{2}))\s*(?:am|pm)?\b/i) ??
+    text.match(/\b(\d{1,2})\s*(am|pm|baje)\b/i);
+
   if (!match) return null;
 
-  let hour = Number(match[1]);
+  const hour = Number(match[1]);
   const minute = match[2] ? Number(match[2]) : 0;
-  const meridiem = match[3]?.toLowerCase() ?? null;
+  const meridiem = (match[3] ?? match[2] ?? "").toLowerCase();
+  const suffix = match[0].toLowerCase();
+  const isAmPm = /\b(?:am|pm)\b/i.test(suffix);
 
   if (minute > 59) return null;
 
-  if (meridiem) {
-    if (hour < 1 || hour > 12) return null;
-    if (meridiem === "pm" && hour !== 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
+  let normalizedHour = hour;
+  if (isAmPm) {
+    const ampm = suffix.match(/\b(am|pm)\b/i)?.[1].toLowerCase();
+    if (hour < 1 || hour > 12 || !ampm) return null;
+    if (ampm === "pm" && hour !== 12) normalizedHour += 12;
+    if (ampm === "am" && hour === 12) normalizedHour = 0;
   } else if (hour > 23) {
     return null;
   }
 
-  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  return String(normalizedHour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+
+function timeRanges(text: string) {
+  const ranges: Array<[number, number]> = [];
+  const patterns = [
+    /\b(?:on|at)\s+\d{1,2}(?::?\d{2})?\s*(?:am|pm)?\b/gi,
+    /\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi,
+    /\b\d{1,2}\s*(?:am|pm|baje)\b/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      ranges.push([start, start + match[0].length]);
+    }
+  }
+  return ranges;
 }
 
 function cleanDescription(text: string, account: string | null) {
@@ -66,6 +90,8 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
     .replace(/\b\d+(?:\.\d+)?\b/g, " ")
     .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::?\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
     .replace(/\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/gi, " ")
     .trim();
@@ -100,15 +126,15 @@ export function interpretTransaction(input: string): Interpretation {
     };
   }
 
-  const timeMatch = text.match(/\b(?:on|at)\s+(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?\b/i);
-  const timeToken = timeMatch?.[0] ?? null;
+  const ranges = timeRanges(text);
   const amountCandidates = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)]
     .filter((match) => {
       const value = match[0];
       const index = match.index ?? 0;
-      if (timeToken && index >= (timeMatch?.index ?? -1) && index < (timeMatch?.index ?? -1) + timeToken.length) return false;
-      return Number(value) > 0;
+      const isTimeNumber = ranges.some(([start, end]) => index >= start && index < end);
+      return !isTimeNumber && Number(value) > 0;
     });
+
   const amountMatch = amountCandidates.length ? amountCandidates[0] : null;
   if (amountMatch) {
     const amount = Number(amountMatch[0]);
