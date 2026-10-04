@@ -17,6 +17,7 @@ export type Interpretation = {
   description: string | null;
   account: string | null;
   transaction_time: string | null;
+  date_offset: number;
   salary_deduction: boolean;
   confidence: number;
   needs_clarification: boolean;
@@ -50,6 +51,12 @@ function hasComplexFinancialMeaning(text: string) {
 
 function resolveAccount(text: string) {
   return accountAliases.find(({ pattern }) => pattern.test(text))?.account ?? null;
+}
+
+function parseDateOffset(text: string): number {
+  if (/\b(?:yesterday|kal)\b/i.test(text) && /\b(?:paid|bought|liya|liye|diya|diye|kiya|pay)\b/i.test(text)) return -1;
+  if (/\b(?:tomorrow|kal)\b/i.test(text) && /\b(?:will|karunga|karoon|doonga|dunga)\b/i.test(text)) return 1;
+  return 0;
 }
 
 function parseTime(text: string): string | null {
@@ -114,7 +121,7 @@ function cleanDescription(text: string, account: string | null) {
   let description = text
     .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
     .replace(/\b\d+(?:\.\d+)?\s*(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\s*(?:ki|ka|ke)?\b/gi, " ")
-    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b(?:today|aaj|yesterday|kal)\b/gi, " ")\n    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
@@ -159,6 +166,7 @@ export function interpretTransaction(input: string): Interpretation {
       description: "Salary",
       account: null,
       transaction_time: null,
+      date_offset: 0,
       salary_deduction: false,
       confidence: 0.99,
       needs_clarification: false,
@@ -198,6 +206,7 @@ export function interpretTransaction(input: string): Interpretation {
 
   const account = resolveAccount(text);
   const transaction_time = parseTime(text);
+  const date_offset = parseDateOffset(text);
   const salary_deduction = isSalaryDeduction(text);
 
   if (!amount) return clarification("I need a valid amount.");
@@ -213,6 +222,7 @@ export function interpretTransaction(input: string): Interpretation {
       description,
       account: null,
       transaction_time,
+      date_offset,
       salary_deduction: true,
       confidence: 0.99,
       needs_clarification: false,
@@ -231,6 +241,7 @@ export function interpretTransaction(input: string): Interpretation {
     description,
     account,
     transaction_time,
+    date_offset,
     salary_deduction: false,
     confidence: 0.96,
     needs_clarification: false,
