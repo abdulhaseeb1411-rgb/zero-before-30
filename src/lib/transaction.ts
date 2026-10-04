@@ -25,13 +25,13 @@ export type Interpretation = {
 };
 
 const accountAliases: Array<{ pattern: RegExp; account: string }> = [
-  { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
   { pattern: /\b(?:alfalah|bank alfalah)(?:\s+bank)?\s*(?:cc|credit\s*card|card)\b/i, account: "Bank Alfalah Credit Card" },
   { pattern: /\b(?:hbl|habib bank)\s*(?:cc|credit\s*card|card)\b/i, account: "HBL Credit Card" },
   { pattern: /\b(?:meezan)\s*(?:cc|credit\s*card|card)?\b/i, account: "Meezan" },
   { pattern: /\b(?:ubl|united bank)\s*(?:cc|credit\s*card|card)\b/i, account: "UBL Credit Card" },
   { pattern: /\b(?:js|js bank)\s*(?:cc|credit\s*card|card)\b/i, account: "JS Bank Credit Card" },
   { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "CARD_GENERIC" },
+  { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
 ];
 
 function isSalaryDeduction(text: string) {
