@@ -64,6 +64,8 @@ function cleanDescription(text: string, account: string | null) {
   let description = text
     .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
     .replace(/\b\d+(?:\.\d+)?\b/g, " ")\n    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::?\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
+    .replace(/\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/gi, " ")
     .trim();
 
   for (const alias of accountAliases) {
