@@ -83,6 +83,20 @@ async function findAccount(env: Env, token: string, userId: string, name: string
   return rows[0] ?? null;
 }
 
+async function findSingleCardAccount(env: Env, token: string, userId: string) {
+  const params = new URLSearchParams({
+    select: "id,name,type,currency,is_active",
+    user_id: "eq." + userId,
+    type: "eq.card",
+    is_active: "eq.true",
+    limit: "2",
+  });
+  const response = await supabaseRequest(env, "/rest/v1/accounts?" + params.toString(), token);
+  if (!response.ok) throw new Error("Unable to read card accounts.");
+  const rows = await response.json() as Array<{ id: string; name: string; type: string; currency: string; is_active: boolean }>;
+  return rows.length === 1 ? rows[0] : null;
+}
+
 async function ensureCashAccount(env: Env, token: string, userId: string) {
   const existing = await findAccount(env, token, userId, "Cash");
   if (existing) return existing;
@@ -110,7 +124,7 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
     ? [
         { terms: ["petrol", "fuel", "diesel"], names: ["transport"] },
         { terms: ["grocery", "groceries", "sabzi", "vegetable", "vegetables", "chicken", "meat", "eggs", "naan"], names: ["groceries"] },
-        { terms: ["lunch", "dinner", "breakfast", "restaurant", "meal", "food"], names: ["food & dining"] },
+        { terms: ["lunch", "dinner", "breakfast", "restaurant", "meal", "food", "chai", "tea", "snacks", "snack"], names: ["food & dining"] },
         { terms: ["medicine", "doctor", "hospital", "pharmacy"], names: ["health"] },
         { terms: ["electricity", "bijli", "gas bill", "water bill", "internet", "mobile"], names: ["bills & utilities"] },
       ]
@@ -143,7 +157,9 @@ async function createTransaction(env: Env, token: string, userId: string, result
       const accountName = result.account ?? "Cash";
       const account = accountName === "Cash"
         ? await ensureCashAccount(env, token, userId)
-        : await findAccount(env, token, userId, accountName);
+        : accountName === "CARD_GENERIC"
+          ? await findSingleCardAccount(env, token, userId)
+          : await findAccount(env, token, userId, accountName);
       accountId = account?.id ?? null;
       if (!accountId) throw new Error("Payment account could not be resolved.");
     }
