@@ -1,5 +1,6 @@
 export type Intent =
   | "expense"
+  | "salary_deduction"
   | "income"
   | "lent"
   | "borrowed"
@@ -118,7 +119,7 @@ export function interpretTransaction(input: string): Interpretation {
 
     if (description) {
       return {
-        intent: "expense",
+        intent: salary_deduction ? "salary_deduction" : "expense",
         amount,
         currency: "PKR",
         description,
