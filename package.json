@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "worker:dev": "wrangler dev",
     "worker:deploy": "npm run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "benchmark": "tsx scripts/transaction-benchmark.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -22,6 +23,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
-    "wrangler": "^4.44.0"
+    "wrangler": "^4.44.0",
+    "tsx": "^4.20.5"
   }
 }
