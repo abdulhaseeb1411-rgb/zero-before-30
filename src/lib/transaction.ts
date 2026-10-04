@@ -98,9 +98,18 @@ export function interpretTransaction(input: string): Interpretation {
     };
   }
 
-  const amountMatch = text.match(/(?:^|\s)(\d+(?:\.\d+)?)(?=\s|$)/);
+  const timeMatch = text.match(/\b(?:on|at)\s+(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?\b/i);
+  const timeToken = timeMatch?.[0] ?? null;
+  const amountCandidates = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)]
+    .filter((match) => {
+      const value = match[0];
+      const index = match.index ?? 0;
+      if (timeToken && index >= (timeMatch?.index ?? -1) && index < (timeMatch?.index ?? -1) + timeToken.length) return false;
+      return Number(value) > 0;
+    });
+  const amountMatch = amountCandidates.length ? amountCandidates[0] : null;
   if (amountMatch) {
-    const amount = Number(amountMatch[1]);
+    const amount = Number(amountMatch[0]);
     const account = resolveAccount(text);\n    const transaction_time = parseTime(text);\n    const salary_deduction = isSalaryDeduction(text);\n    const description = cleanDescription(text, account);
 
     if (description) {
