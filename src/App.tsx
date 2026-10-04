@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const SUPABASE_URL = "https://jipucjufzyznnavmbvzx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_OURbMvlxbJsmX8WTwb5Z3A_k3On9OLg";
 const AUTH_REDIRECT_URL = "https://z30-webhook.abdulhaseeb1411.workers.dev";
 
 const navItems = [
@@ -39,7 +39,7 @@ async function authRequest(path: string, body: Record<string, string>) {
   }
   if (!response.ok) {
     throw new Error(
-      String(data.msg || data.error_description || data.error || "Authentication failed.")
+      String(data.msg || data.error_description || data.error || data.message || `Authentication failed (HTTP ${response.status}).`)
     );
   }
   return data as Session;
