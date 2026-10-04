@@ -20,7 +20,35 @@ export type Interpretation = {
   clarification_reason: string | null;
 };
 
-const expensePattern = /^(?:spent|paid|bought|purchase|expense)?\s*(.+?)\s+(\d+(?:\.\d+)?)\s*(cash)?$/i;
+const accountAliases: Array<{ pattern: RegExp; account: string }> = [
+  { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
+  { pattern: /\b(?:alfalah|bank alfalah)\s*(?:cc|credit\s*card|card)\b/i, account: "Bank Alfalah Credit Card" },
+  { pattern: /\b(?:hbl|habib bank)\s*(?:cc|credit\s*card|card)\b/i, account: "HBL Credit Card" },
+  { pattern: /\b(?:meezan)\s*(?:cc|credit\s*card|card)?\b/i, account: "Meezan" },
+  { pattern: /\b(?:ubl|united bank)\s*(?:cc|credit\s*card|card)\b/i, account: "UBL Credit Card" },
+  { pattern: /\b(?:js|js bank)\s*(?:cc|credit\s*card|card)\b/i, account: "JS Bank Credit Card" },
+];
+
+function resolveAccount(text: string) {
+  return accountAliases.find(({ pattern }) => pattern.test(text))?.account ?? null;
+}
+
+function cleanDescription(text: string, account: string | null) {
+  let description = text
+    .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
+    .replace(/\b\d+(?:\.\d+)?\b/g, " ")
+    .trim();
+
+  for (const alias of accountAliases) {
+    description = description.replace(alias.pattern, " ");
+  }
+
+  if (account) {
+    description = description.replace(/\s+/g, " ").trim();
+  }
+
+  return description.replace(/^[-,:]+|[-,:]+$/g, "").replace(/\s+/g, " ").trim();
+}
 
 export function interpretTransaction(input: string): Interpretation {
   const text = input.trim();
@@ -39,19 +67,24 @@ export function interpretTransaction(input: string): Interpretation {
     };
   }
 
-  const match = text.match(expensePattern);
-  if (match) {
-    const [, description, amount, cash] = match;
-    return {
-      intent: "expense",
-      amount: Number(amount),
-      currency: "PKR",
-      description: description.trim(),
-      account: cash ? "Cash" : null,
-      confidence: cash ? 0.99 : 0.92,
-      needs_clarification: !cash,
-      clarification_reason: cash ? null : "How did you pay?",
-    };
+  const amountMatch = text.match(/(?:^|\s)(\d+(?:\.\d+)?)(?=\s|$)/);
+  if (amountMatch) {
+    const amount = Number(amountMatch[1]);
+    const account = resolveAccount(text);
+    const description = cleanDescription(text, account);
+
+    if (description) {
+      return {
+        intent: "expense",
+        amount,
+        currency: "PKR",
+        description,
+        account,
+        confidence: account ? 0.99 : 0.92,
+        needs_clarification: !account,
+        clarification_reason: account ? null : "How did you pay?",
+      };
+    }
   }
 
   return {
