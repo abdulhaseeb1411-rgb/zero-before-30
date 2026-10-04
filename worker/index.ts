@@ -128,10 +128,12 @@ async function createTransaction(env: Env, token: string, userId: string, result
   if (!result.amount || !result.currency || !result.description) throw new Error("Incomplete transaction interpretation.");
   let accountId: string | null = null;
   if (result.intent === "expense") {
-    if (result.account !== "Cash") throw new Error("How did you pay?");
-    const account = await ensureCashAccount(env, token, userId);
+    const accountName = result.account ?? "Cash";
+    const account = accountName === "Cash"
+      ? await ensureCashAccount(env, token, userId)
+      : await findAccount(env, token, userId, accountName);
     accountId = account?.id ?? null;
-    if (!accountId) throw new Error("Cash account could not be resolved.");
+    if (!accountId) throw new Error("Payment account could not be resolved.");
   }
   const kind = result.intent === "income" ? "income" : "expense";
   const category = await findCategory(env, token, kind, result.description);
