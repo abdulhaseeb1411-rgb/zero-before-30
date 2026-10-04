@@ -112,7 +112,7 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
         { terms: ["grocery", "groceries", "sabzi", "vegetable", "vegetables", "chicken", "meat", "eggs", "naan"], names: ["groceries"] },
         { terms: ["lunch", "dinner", "breakfast", "restaurant", "meal", "food"], names: ["food & dining"] },
         { terms: ["medicine", "doctor", "hospital", "pharmacy"], names: ["health"] },
-        { terms: ["electricity", "gas bill", "water bill", "internet", "mobile"], names: ["bills & utilities"] },
+        { terms: ["electricity", "bijli", "gas bill", "water bill", "internet", "mobile"], names: ["bills & utilities"] },
       ]
     : [{ terms: ["salary", "paycheck", "wage"], names: ["salary"] }];
   for (const alias of aliases) {
@@ -139,12 +139,14 @@ async function createTransaction(env: Env, token: string, userId: string, result
   if (!result.amount || !result.currency || !result.description) throw new Error("Incomplete transaction interpretation.");
   let accountId: string | null = null;
   if (result.intent === "expense") {
-    const accountName = result.account ?? "Cash";
-    const account = accountName === "Cash"
-      ? await ensureCashAccount(env, token, userId)
-      : await findAccount(env, token, userId, accountName);
-    accountId = account?.id ?? null;
-    if (!accountId) throw new Error("Payment account could not be resolved.");
+    if (!result.salary_deduction) {
+      const accountName = result.account ?? "Cash";
+      const account = accountName === "Cash"
+        ? await ensureCashAccount(env, token, userId)
+        : await findAccount(env, token, userId, accountName);
+      accountId = account?.id ?? null;
+      if (!accountId) throw new Error("Payment account could not be resolved.");
+    }
   }
   const kind = result.intent === "income" ? "income" : "expense";
   const category = await findCategory(env, token, kind, result.description);
