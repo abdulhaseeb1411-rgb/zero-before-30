@@ -158,7 +158,7 @@ async function createTransaction(env: Env, token: string, userId: string, result
       const accountName = result.account ?? "Cash";
       const account = accountName === "Cash"
         ? await ensureCashAccount(env, token, userId)
-        : accountName === "CARD_GENERIC"
+        : accountName === "Credit Card"
           ? await findSingleCardAccount(env, token, userId)
           : await findAccount(env, token, userId, accountName);
       accountId = account?.id ?? null;
