@@ -62,8 +62,8 @@ function resolveAccount(text: string) {
     .find(({ pattern }) => pattern.test(text));
   if (namedAccount) return namedAccount.account;
 
-  const hasNegatedCash = /\\bcash\\b[^.!?]{0,40}\\b(?:nahi|nahin|na)\\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\\b/i.test(text)
-    || /\\b(?:nahi|nahin|na)\\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\\b[^.!?]{0,20}\\bcash\\b/i.test(text);
+  const hasNegatedCash = /\bcash\b[^.!?]{0,40}\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b/i.test(text)
+    || /\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b[^.!?]{0,20}\bcash\b/i.test(text);
   if (!hasNegatedCash && /\\bcash\\b/i.test(text)) return "Cash";
 
   return accountAliases.find(({ pattern, account }) => account === "CARD_GENERIC" && pattern.test(text))?.account ?? null;
