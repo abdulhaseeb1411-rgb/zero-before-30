@@ -54,7 +54,19 @@ function hasComplexFinancialMeaning(text: string) {
 }
 
 function resolveAccount(text: string) {
-  return accountAliases.find(({ pattern }) => pattern.test(text))?.account ?? null;
+  // Resolve explicit/named accounts before generic payment words.
+  // In phrases such as "cash nahi tha isliye alfalah cc pe", "cash" is
+  // negated, so it must not override the explicit Alfalah credit card.
+  const namedAccount = accountAliases
+    .filter(({ account }) => account !== "Cash" && account !== "CARD_GENERIC")
+    .find(({ pattern }) => pattern.test(text));
+  if (namedAccount) return namedAccount.account;
+
+  const hasNegatedCash = /\\bcash\\b[^.!?]{0,40}\\b(?:nahi|nahin|na)\\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\\b/i.test(text)
+    || /\\b(?:nahi|nahin|na)\\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\\b[^.!?]{0,20}\\bcash\\b/i.test(text);
+  if (!hasNegatedCash && /\\bcash\\b/i.test(text)) return "Cash";
+
+  return accountAliases.find(({ pattern, account }) => account === "CARD_GENERIC" && pattern.test(text))?.account ?? null;
 }
 
 function parseDateOffset(text: string): number {
