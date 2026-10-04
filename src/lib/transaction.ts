@@ -16,6 +16,7 @@ export type Interpretation = {
   description: string | null;
   account: string | null;
   transaction_time: string | null;
+  salary_deduction: boolean;
   confidence: number;
   needs_clarification: boolean;
   clarification_reason: string | null;
@@ -29,6 +30,10 @@ const accountAliases: Array<{ pattern: RegExp; account: string }> = [
   { pattern: /\b(?:ubl|united bank)\s*(?:cc|credit\s*card|card)\b/i, account: "UBL Credit Card" },
   { pattern: /\b(?:js|js bank)\s*(?:cc|credit\s*card|card)\b/i, account: "JS Bank Credit Card" },
 ];
+
+function isSalaryDeduction(text: string) {
+  return /\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b|\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/i.test(text);
+}
 
 function resolveAccount(text: string) {
   return accountAliases.find(({ pattern }) => pattern.test(text))?.account ?? null;
@@ -84,6 +89,7 @@ export function interpretTransaction(input: string): Interpretation {
       description: "Salary",
       account: null,
       transaction_time: null,
+      salary_deduction: false,
       confidence: 0.99,
       needs_clarification: false,
       clarification_reason: null,
@@ -93,7 +99,7 @@ export function interpretTransaction(input: string): Interpretation {
   const amountMatch = text.match(/(?:^|\s)(\d+(?:\.\d+)?)(?=\s|$)/);
   if (amountMatch) {
     const amount = Number(amountMatch[1]);
-    const account = resolveAccount(text);\n    const transaction_time = parseTime(text);\n    const description = cleanDescription(text, account);
+    const account = resolveAccount(text);\n    const transaction_time = parseTime(text);\n    const salary_deduction = isSalaryDeduction(text);\n    const description = cleanDescription(text, account);
 
     if (description) {
       return {
@@ -101,11 +107,12 @@ export function interpretTransaction(input: string): Interpretation {
         amount,
         currency: "PKR",
         description,
-        account,
+        account: salary_deduction ? null : account,
         transaction_time,
-        confidence: account ? 0.99 : 0.92,
-        needs_clarification: !account,
-        clarification_reason: account ? null : "How did you pay?",
+        salary_deduction,
+        confidence: salary_deduction || account ? 0.99 : 0.92,
+        needs_clarification: !account && !salary_deduction,
+        clarification_reason: account || salary_deduction ? null : "How did you pay?",
       };
     }
   }
@@ -117,6 +124,7 @@ export function interpretTransaction(input: string): Interpretation {
     description: null,
     account: null,
     transaction_time: null,
+    salary_deduction: false,
     confidence: 0,
     needs_clarification: true,
     clarification_reason: "I need a little more detail to record this.",
@@ -124,7 +132,7 @@ export function interpretTransaction(input: string): Interpretation {
 }
 
 export function validateInterpretation(result: Interpretation) {
-  if (result.intent === "expense" && !result.account) {
+  if (result.intent === "expense" && !result.account && !result.salary_deduction) {
     return { valid: false, reason: "How did you pay?" };
   }
 
