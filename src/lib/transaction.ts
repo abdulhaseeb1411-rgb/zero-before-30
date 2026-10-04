@@ -121,7 +121,8 @@ function cleanDescription(text: string, account: string | null) {
   let description = text
     .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
     .replace(/\b\d+(?:\.\d+)?\s*(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\s*(?:ki|ka|ke)?\b/gi, " ")
-    .replace(/\b(?:today|aaj|yesterday|kal)\b/gi, " ")\n    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b(?:today|aaj|yesterday|kal)\b/gi, " ")
+    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
@@ -147,6 +148,7 @@ function clarification(reason: string): Interpretation {
     description: null,
     account: null,
     transaction_time: null,
+    date_offset: 0,
     salary_deduction: false,
     confidence: 0,
     needs_clarification: true,
