@@ -54,6 +54,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [input, setInput] = useState("");
+  const [pendingInput, setPendingInput] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -70,6 +71,7 @@ export default function App() {
   async function loadTransactions(currentSession: Session) {
     setLoadingTransactions(true);
     try {
+      const transactionInput = pendingInput ? pendingInput + " " + input.trim() : input.trim();
       const response = await fetch("/api/transactions", {
         headers: { Authorization: "Bearer " + currentSession.access_token },
       });
@@ -153,16 +155,22 @@ export default function App() {
           Authorization: "Bearer " + session.access_token,
           "X-Client-Request-Id": crypto.randomUUID(),
         },
-        body: JSON.stringify({ input: input.trim() }),
+        body: JSON.stringify({ input: transactionInput }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(body.clarification_reason || body.error || "Unable to record this.");
+        if (body.clarification_reason === "How did you pay?") {
+          setPendingInput(transactionInput);
+          setMessage("How did you pay? Enter cash, card, or another account.");
+        } else {
+          setMessage(body.clarification_reason || body.error || "Unable to record this.");
+        }
         setInput("");
         return;
       }
-      setMessage("Recorded: " + body.interpretation.description + " — Rs " + body.interpretation.amount + ".");
+      setMessage("Recorded: " + body.interpretation.description + " - Rs " + body.interpretation.amount + ".");
       setInput("");
+      setPendingInput(null);
       await loadTransactions(session);
     } catch {
       setMessage("Z30 could not reach the transaction service. Please try again.");
@@ -240,7 +248,7 @@ export default function App() {
               {sending ? "…" : "↑"}
             </button>
           </div>
-          <p className="hint">Try “petrol 450 cash”</p>
+          <p className="hint">{pendingInput ? "Payment method for: " + pendingInput : "Try “petrol 450 cash”"}</p>
           {message && <p className="interpreter-message">{message}</p>}
         </section>
 
