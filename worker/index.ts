@@ -45,7 +45,7 @@ async function getUser(env: Env, token: string): Promise<SupabaseUser | null> {
 
 async function listTransactions(env: Env, token: string, userId: string) {
   const params = new URLSearchParams({
-    select: "id,type,amount,currency,description,transaction_date,created_at",
+    select: "id,type,amount,currency,description,transaction_date,transaction_at,created_at",
     user_id: "eq." + userId,
     status: "eq.active",
     order: "created_at.desc",
@@ -109,7 +109,7 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
   const aliases = kind === "expense"
     ? [
         { terms: ["petrol", "fuel", "diesel"], names: ["transport"] },
-        { terms: ["grocery", "groceries", "eggs", "naan"], names: ["groceries"] },
+        { terms: ["grocery", "groceries", "sabzi", "vegetable", "vegetables", "chicken", "meat", "eggs", "naan"], names: ["groceries"] },
         { terms: ["lunch", "dinner", "breakfast", "restaurant", "meal", "food"], names: ["food & dining"] },
         { terms: ["medicine", "doctor", "hospital", "pharmacy"], names: ["health"] },
         { terms: ["electricity", "gas bill", "water bill", "internet", "mobile"], names: ["bills & utilities"] },
@@ -122,6 +122,17 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
     }
   }
   return categories.find((category) => category.name.toLowerCase().startsWith("other")) ?? null;
+}
+
+function pakistanNow() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
+}
+
+function buildTransactionTimestamp(transactionTime: string | null) {
+  const now = pakistanNow();
+  const date = now.toISOString().slice(0, 10);
+  if (!transactionTime) return new Date().toISOString();
+  return date + "T" + transactionTime + ":00+05:00";
 }
 
 async function createTransaction(env: Env, token: string, userId: string, result: ReturnType<typeof interpretTransaction>) {
@@ -138,10 +149,12 @@ async function createTransaction(env: Env, token: string, userId: string, result
   const kind = result.intent === "income" ? "income" : "expense";
   const category = await findCategory(env, token, kind, result.description);
   if (!category) throw new Error("No " + kind + " category is available.");
+  const transactionAt = buildTransactionTimestamp(result.transaction_time);
   const transaction = {
     user_id: userId, type: result.intent, amount: result.amount, currency: result.currency,
     category_id: category.id, description: result.description,
-    transaction_date: new Date().toISOString().slice(0, 10), account_id: accountId, status: "active",
+    transaction_date: transactionAt.slice(0, 10), transaction_at: transactionAt,
+    account_id: accountId, status: "active",
   };
   const response = await supabaseRequest(env, "/rest/v1/transactions", token, {
     method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(transaction),
