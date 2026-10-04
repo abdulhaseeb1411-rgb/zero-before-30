@@ -25,6 +25,7 @@ export type Interpretation = {
 
 const accountAliases: Array<{ pattern: RegExp; account: string }> = [
   { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
+  { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "CARD_GENERIC" },
   { pattern: /\b(?:alfalah|bank alfalah)(?:\s+bank)?\s*(?:cc|credit\s*card|card)\b/i, account: "Bank Alfalah Credit Card" },
   { pattern: /\b(?:hbl|habib bank)\s*(?:cc|credit\s*card|card)\b/i, account: "HBL Credit Card" },
   { pattern: /\b(?:meezan)\s*(?:cc|credit\s*card|card)?\b/i, account: "Meezan" },
@@ -118,11 +119,13 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
     .replace(/\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\s*(?:ki|ka|ke)?\b/gi, " ")
     .replace(/\b(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\b/gi, " ");
 
   for (const alias of accountAliases) {
     description = description.replace(alias.pattern, " ");
   }
+  description = description.replace(/\b(?:card|cc|credit\s*card)\s+(?:se|say|pe|pay|par|on|from)\b/gi, " ");
 
   if (account) description = description.replace(/\s+/g, " ").trim();
 
@@ -164,6 +167,18 @@ export function interpretTransaction(input: string): Interpretation {
   }
 
   if (hasComplexFinancialMeaning(text)) {
+    if (/\b(?:wapas\s+(?:mile|milay|mila|mil|kar|kiya)|returned|return\s+mil|refund)\b/i.test(text)) {
+      return clarification("This sounds like money being returned from an earlier payment or loan. I need to know what the original transaction was before I record the return.");
+    }
+    if (/\b(?:withdraw|withdrawal|cash\s+nikal|nikal(?:a|e|i)?)\b.*\b(?:bank|account)\b/i.test(text)) {
+      return clarification("This sounds like a bank-to-cash transfer, not an expense. I need the source account and destination account before recording it.");
+    }
+    if (/\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i.test(text)) {
+      return clarification("This sounds like borrowed money, not ordinary income. I need to know who the money came from before recording it.");
+    }
+    if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text)) {
+      return clarification("This sounds like money you lent or expect back. I need to know the person and whether this is a new loan or a repayment.");
+    }
     return clarification("This may involve more than one financial event. I need to clarify it before recording.");
   }
 
