@@ -71,7 +71,6 @@ export default function App() {
   async function loadTransactions(currentSession: Session) {
     setLoadingTransactions(true);
     try {
-      const transactionInput = pendingInput ? pendingInput + " " + input.trim() : input.trim();
       const response = await fetch("/api/transactions", {
         headers: { Authorization: "Bearer " + currentSession.access_token },
       });
@@ -148,6 +147,7 @@ export default function App() {
     setSending(true);
     setMessage("");
     try {
+      const transactionInput = pendingInput ? pendingInput + " " + input.trim() : input.trim();
       const response = await fetch("/api/transactions", {
         method: "POST",
         headers: {
