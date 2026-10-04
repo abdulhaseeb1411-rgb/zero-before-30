@@ -26,12 +26,12 @@ export type Interpretation = {
 
 const accountAliases: Array<{ pattern: RegExp; account: string }> = [
   { pattern: /\b(?:cash|cash account)\b/i, account: "Cash" },
-  { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "CARD_GENERIC" },
   { pattern: /\b(?:alfalah|bank alfalah)(?:\s+bank)?\s*(?:cc|credit\s*card|card)\b/i, account: "Bank Alfalah Credit Card" },
   { pattern: /\b(?:hbl|habib bank)\s*(?:cc|credit\s*card|card)\b/i, account: "HBL Credit Card" },
   { pattern: /\b(?:meezan)\s*(?:cc|credit\s*card|card)?\b/i, account: "Meezan" },
   { pattern: /\b(?:ubl|united bank)\s*(?:cc|credit\s*card|card)\b/i, account: "UBL Credit Card" },
   { pattern: /\b(?:js|js bank)\s*(?:cc|credit\s*card|card)\b/i, account: "JS Bank Credit Card" },
+  { pattern: /\b(?:cc|credit\s*card|card)\s+(?:se|say|pe|pay|par|on|from)\b/i, account: "CARD_GENERIC" },
 ];
 
 function isSalaryDeduction(text: string) {
@@ -48,6 +48,7 @@ function hasComplexFinancialMeaning(text: string) {
     /\b(?:split|baqi|remaining|aur\s+baqi)\b/i,
     /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:wapas|return|deni\s+hai|dena\s+hai|denge|dega|degi|milna\s+hai)\b/i,
     /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|wapas|return)\b/i,
+    /\b(?:usne|unhon(?:e|ny)|woh)\b.*\b(?:mere\s+paise|paise)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|denge|dega|degi)\b/i,
     /\b(?:mile|mila|milay)\b.*\b(?:wapas\s+kar(?:na|ni)|return\s+kar(?:na|ni)|dena\s+hai|deni\s+hai)\b/i,
   ].some((pattern) => pattern.test(text));
 }
@@ -79,11 +80,12 @@ function parseTime(text: string): string | null {
   if (!match) return null;
 
   const hour = Number(match[1]);
-  const minute = match[2] ? Number(match[2]) : 0;
   const suffix = match[0].toLowerCase();
   const ampm = suffix.match(/\b(am|pm)\b/i)?.[1]?.toLowerCase();
+  const hasBajeSuffix = /\bbaje\b/i.test(suffix);
+  const minute = match[2] && !hasBajeSuffix ? Number(match[2]) : 0;
 
-  if (minute > 59) return null;
+  if (Number.isNaN(hour) || Number.isNaN(minute) || minute > 59) return null;
 
   let normalizedHour = hour;
   if (ampm) {
