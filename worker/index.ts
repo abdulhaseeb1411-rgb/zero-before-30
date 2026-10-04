@@ -142,11 +142,12 @@ function pakistanNow() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
 }
 
-function buildTransactionTimestamp(transactionTime: string | null) {
-  const now = pakistanNow();
-  const date = now.toISOString().slice(0, 10);
-  if (!transactionTime) return new Date().toISOString();
-  return date + "T" + transactionTime + ":00+05:00";
+function buildTransactionTimestamp(transactionTime: string | null, dateOffset: number) {
+  const date = pakistanNow();
+  date.setDate(date.getDate() + dateOffset);
+  const datePart = date.toISOString().slice(0, 10);
+  if (!transactionTime) return dateOffset === 0 ? new Date().toISOString() : datePart + "T12:00:00+05:00";
+  return datePart + "T" + transactionTime + ":00+05:00";
 }
 
 async function createTransaction(env: Env, token: string, userId: string, result: ReturnType<typeof interpretTransaction>) {
@@ -167,7 +168,7 @@ async function createTransaction(env: Env, token: string, userId: string, result
   const kind = result.intent === "income" ? "income" : "expense";
   const category = await findCategory(env, token, kind, result.description);
   if (!category) throw new Error("No " + kind + " category is available.");
-  const transactionAt = buildTransactionTimestamp(result.transaction_time);
+  const transactionAt = buildTransactionTimestamp(result.transaction_time, result.date_offset);
   const transaction = {
     user_id: userId, type: result.intent, amount: result.amount, currency: result.currency,
     category_id: category.id, description: result.description,
