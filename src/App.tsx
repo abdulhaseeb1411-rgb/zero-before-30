@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const AUTH_REDIRECT_URL = "https://z30-webhook.abdulhaseeb1411.workers.dev";
 
 const navItems = [
   { label: "Home", icon: "⌂", active: true },
@@ -25,7 +26,7 @@ async function authRequest(path: string, body: Record<string, string>) {
   const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
-    body: JSON.stringify({ ...body, ...(path === "signup" ? { options: { email_redirect_to: window.location.origin } } : {}) }),
+    body: JSON.stringify({ ...body, ...(path === "signup" ? { options: { email_redirect_to: AUTH_REDIRECT_URL } } : {}) }),
   });
   const raw = await response.text();
   let data: Record<string, unknown> = {};
@@ -118,7 +119,7 @@ export default function App() {
         body: JSON.stringify({
           type: "signup",
           email: email.trim(),
-          options: { email_redirect_to: window.location.origin },
+          options: { email_redirect_to: AUTH_REDIRECT_URL },
         }),
       });
       const raw = await response.text();
