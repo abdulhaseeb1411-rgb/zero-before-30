@@ -48,7 +48,7 @@ function hasComplexFinancialMeaning(text: string) {
     /\b(?:split|baqi|remaining|aur\s+baqi)\b/i,
     /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:wapas|return|deni\s+hai|dena\s+hai|denge|dega|degi|milna\s+hai)\b/i,
     /\b(?:mujhe|usko|unko|ali|amjad|hanif|cousin|friend|wife|biwi|ammi|bhai|sister)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|wapas|return)\b/i,
-    /\b(?:usne|unhon(?:e|ny)|woh)\b.*\b(?:mere\s+paise|paise)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|denge|dega|degi)\b/i,
+    /\b(?:usne|unhon(?:e|ny)|woh)\b.*\b(?:mere\s+paise|paise)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|dene|denge|dega|degi)\b/i,
     /\b(?:mile|mila|milay)\b.*\b(?:wapas\s+kar(?:na|ni)|return\s+kar(?:na|ni)|dena\s+hai|deni\s+hai)\b/i,
   ].some((pattern) => pattern.test(text));
 }
@@ -228,7 +228,7 @@ export function interpretTransaction(input: string): Interpretation {
     if (/\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i.test(text) || /\b(?:cousin|hanif|friend|bhai|ammi|wife|biwi|person)\b.*\b(?:mila|mile|milay)\b.*\b(?:wapas|return)\b/i.test(text)) {
       return clarification("This sounds like borrowed money, not ordinary income. I need to know who the money came from before recording it.");
     }
-    if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text) || /\b(?:usko|unko|amjad|ali|anees|wife|biwi|friend|bhai)\b.*\b(?:wapas|return|baad\s+mein)\b.*\b(?:dena|deni|denge|dega|degi)\b/i.test(text)) {
+    if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text) || /\b(?:usko|unko|amjad|ali|anees|wife|biwi|friend|bhai)\b.*\b(?:wapas|return|baad\s+mein)\b.*\b(?:dena|deni|dene|denge|dega|degi)\b/i.test(text) || /\busne\b.*\b(?:mere\s+paise|paise)\b.*\b(?:baad\s+mein|later)\b.*\b(?:dena|deni|dene|denge|dega|degi)\b/i.test(text)) {
       return clarification("This sounds like money you lent or expect back. I need to know the person and whether this is a new loan or a repayment.");
     }
     return clarification("I found multiple money events or unclear financial meaning. I need to clarify the transaction before recording it.");
