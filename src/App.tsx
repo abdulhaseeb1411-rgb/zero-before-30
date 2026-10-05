@@ -252,9 +252,9 @@ export default function App() {
 
         <section className="balance-card">
           <div>
-            <p className="section-label">YOUR MONEY</p>
+            <p className="section-label">NET RECORDED</p>
             <p className="balance">{summary ? summary.currency + " " + Math.round(summary.net_recorded).toLocaleString("en-PK") : "Rs 0"}</p>
-            <p className="muted">{summary ? "net recorded so far" : "loading your money story..."}</p>
+            <p className="muted">{summary ? "income minus recorded deductions and expenses" : "loading your money story..."}</p>
           </div>
           <span className="balance-mark" aria-hidden="true">↗</span>
         </section>
