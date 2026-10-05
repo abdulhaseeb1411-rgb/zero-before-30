@@ -24,9 +24,9 @@ const cases: Expectation[] = [
   { input: "kal 18:45 pe chicken 2300 liya tha lekin 1400 cash diye", label: "conflicting amounts asks", check: r => r.needs_clarification },
   { input: "3000 ka bill tha, 1000 pehle diye thay aur aaj 2000 diye", label: "staged payment asks", check: r => r.needs_clarification },
   { input: "salary mein 95000 aaye, 20000 bijli aur 5000 tax cut hua", label: "salary plus deductions asks", check: r => r.needs_clarification },
-  { input: "Amjad ki medicine 4800 maine pay ki, usko December mein wapas deni hai", label: "money owed to user", check: r => r.needs_clarification },
+  { input: "Amjad ki medicine 4800 maine pay ki, usko December mein wapas deni hai", label: "money owed to user", check: r => r.needs_clarification && /lent|expect back|person/i.test(r.clarification_reason ?? "") },
   { input: "cousin Hanif se 25000 mile, November mein wapas karne hain", label: "borrowed money asks", check: r => r.needs_clarification },
-  { input: "800 lunch Anees ke saath, usne mere paise baad mein dene hain", label: "reimbursement asks", check: r => r.needs_clarification },
+  { input: "800 lunch Anees ke saath, usne mere paise baad mein dene hain", label: "reimbursement asks", check: r => r.needs_clarification && /lent|expect back|person/i.test(r.clarification_reason ?? "") },
   { input: "5000 cash nikale bank se, kharcha nahi hua", label: "withdrawal is not expense", check: r => r.needs_clarification }
 ];
 
@@ -44,4 +44,9 @@ for (const test of cases) {
 const report = { passed, total: cases.length, results: cases.map(test => ({ label: test.label, input: test.input, interpretation: interpretTransaction(test.input) })) };
 writeFileSync("benchmark-result.json", JSON.stringify(report, null, 2));
 console.log(`Benchmark: ${passed}/${cases.length}`);
+const confidenceValues = new Set(cases.map(test => interpretTransaction(test.input).confidence));
+if (confidenceValues.size < 3) {
+  console.error("FAIL confidence is effectively hardcoded");
+  process.exit(1);
+}
 if (passed !== cases.length) process.exit(1);
