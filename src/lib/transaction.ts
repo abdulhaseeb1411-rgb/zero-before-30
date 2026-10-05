@@ -163,6 +163,7 @@ function cleanDescription(text: string, account: string | null) {
 
   for (const alias of accountAliases) description = description.replace(alias.pattern, " ");
   description = description
+    .replace(/\bcash\s+(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho)\s*(?:isliye|therefore)?\b/gi, " ")
     .replace(/\b(?:cash|cash\s+mein|cash\s+se)\b/gi, " ")
     .replace(/\b(?:card|cc|credit\s*card)\s+(?:se|say|pe|pay|par|on|from)\b/gi, " ")
     .replace(/\b(?:isliye|therefore)\b/gi, " ")
@@ -171,6 +172,11 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/\b(?:ki|ka|ke|wali|wale|waala|waali)\b\s*$/i, " ");
 
   return description
+    .replace(/^\s*(?:ki|ka|ke|wali|wale|waala|waali)\b/gi, " ")
+    .replace(/\b(?:se|say|pe|par|on|mein|main)\s+(?:pay|paid|kiya|diya|diye|liya|liye|li)\b/gi, " ")
+    .replace(/\b(?:pay|paid|kiya|diya|diye|liya|liye|li)\b\s*$/gi, " ")
+    .replace(/\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho)\b/gi, " ")
+    .replace(/\b(?:ki|ka|ke|wali|wale|waala|waali)\b(?=\s+(?:medicine|grocery|groceries|bill|mobile|dinner|lunch|petrol|chicken|chai|snacks))\b/gi, " ")
     .replace(/^[-,:]+|[-,:]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -222,10 +228,10 @@ export function interpretTransaction(input: string): Interpretation {
     if (/\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i.test(text)) {
       return clarification("This sounds like borrowed money, not ordinary income. I need to know who the money came from before recording it.");
     }
-    if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text)) {
+    if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text) || /\b(?:usko|unko|amjad|ali|anees|wife|biwi|friend|bhai)\b.*\b(?:wapas|return|baad\s+mein)\b.*\b(?:dena|deni|denge|dega|degi)\b/i.test(text)) {
       return clarification("This sounds like money you lent or expect back. I need to know the person and whether this is a new loan or a repayment.");
     }
-    return clarification("This may involve more than one financial event. I need to clarify it before recording.");
+    return clarification("I found multiple money events or unclear financial meaning. I need to clarify the transaction before recording it.");
   }
 
   const ranges = timeRanges(text);
