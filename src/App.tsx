@@ -12,6 +12,15 @@ const navItems = [
 ];
 
 type Session = { access_token: string; user: { id: string; email?: string } };
+type Summary = {
+  income: number;
+  salary_deductions: number;
+  expenses: number;
+  net_recorded: number;
+  currency: string;
+  transaction_count: number;
+};
+
 type Transaction = {
   id: string;
   type: string;
@@ -58,6 +67,7 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   useEffect(() => {
@@ -65,6 +75,7 @@ export default function App() {
     else {
       localStorage.removeItem("z30_session");
       setTransactions([]);
+      setSummary(null);
     }
   }, [session]);
 
@@ -90,8 +101,26 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (session) void loadTransactions(session);
+    if (session) {
+      void loadTransactions(session);
+      void loadSummary(session);
+    }
   }, [session]);
+
+  async function loadSummary(currentSession: Session) {
+    try {
+      const response = await fetch("/api/summary", {
+        headers: { Authorization: "Bearer " + currentSession.access_token },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Unable to load summary.");
+      setSummary(body.summary ?? null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to load summary.");
+    }
+  }
+
+
 
   async function signIn() {
     try {
@@ -172,6 +201,7 @@ export default function App() {
       setInput("");
       setPendingInput(null);
       await loadTransactions(session);
+      await loadSummary(session);
     } catch {
       setMessage("Z30 could not reach the transaction service. Please try again.");
     } finally {
@@ -223,8 +253,8 @@ export default function App() {
         <section className="balance-card">
           <div>
             <p className="section-label">YOUR MONEY</p>
-            <p className="balance">Rs 0</p>
-            <p className="muted">balance summary coming next</p>
+            <p className="balance">{summary ? summary.currency + " " + Math.round(summary.net_recorded).toLocaleString("en-PK") : "Rs 0"}</p>
+            <p className="muted">{summary ? "net recorded so far" : "loading your money story..."}</p>
           </div>
           <span className="balance-mark" aria-hidden="true">↗</span>
         </section>
