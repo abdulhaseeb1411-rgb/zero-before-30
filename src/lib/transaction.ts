@@ -225,7 +225,7 @@ export function interpretTransaction(input: string): Interpretation {
     if (/\b(?:withdraw|withdrawal|cash\s+nikal|nikal(?:a|e|i)?)\b.*\b(?:bank|account)\b/i.test(text)) {
       return clarification("This sounds like a bank-to-cash transfer, not an expense. I need the source account and destination account before recording it.");
     }
-    if (/\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i.test(text)) {
+    if (/\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i.test(text) || /\b(?:cousin|hanif|friend|bhai|ammi|wife|biwi|person)\b.*\b(?:mila|mile|milay)\b.*\b(?:wapas|return)\b/i.test(text)) {
       return clarification("This sounds like borrowed money, not ordinary income. I need to know who the money came from before recording it.");
     }
     if (/\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i.test(text) || /\b(?:usko|unko|amjad|ali|anees|wife|biwi|friend|bhai)\b.*\b(?:wapas|return|baad\s+mein)\b.*\b(?:dena|deni|denge|dega|degi)\b/i.test(text)) {
