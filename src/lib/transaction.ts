@@ -35,7 +35,8 @@ const accountAliases: Array<{ pattern: RegExp; account: string }> = [
 ];
 
 function isSalaryDeduction(text: string) {
-  return /\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b|\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/i.test(text);
+  return /\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/i.test(text)
+    || /\bsalary\s+(?:se|say)\b.{0,80}\b(?:cut|deduct(?:ed)?|minus)\b/i.test(text);
 }
 
 function isSimpleSalaryIncome(text: string) {
@@ -51,6 +52,7 @@ function isAccountTransfer(text: string) {
 function hasComplexFinancialMeaning(text: string) {
   return [
     /\b(?:withdraw|withdrawal|cash\s+nikal|nikal(?:a|e|i)?)\b.*\b(?:bank|account)\b/i,
+    /\b(?:bank|account)\b.*\b(?:cash\s+nikal|nikal(?:a|e|i)?)\b/i,
     /\b(?:borrow(?:ed)?|udhaar|qarz|loan)\b/i,
     /\b(?:wapas\s+(?:mile|milay|mila|mil|kar|kiya)|returned|return\s+mil|refund)\b/i,
     /\b(?:lend|lent|receivable|dena\s+hai|dena\s+hain)\b/i,
@@ -79,7 +81,7 @@ function resolveAccount(text: string) {
 }
 
 function parseDateOffset(text: string): number {
-  if (/\b(?:yesterday|kal)\b/i.test(text) && /\b(?:paid|bought|liya|liye|diya|diye|kiya|pay)\b/i.test(text)) return -1;
+  if (/\b(?:yesterday|kal)\b/i.test(text) && /\b(?:paid|bought|liya|liye|diya|diye|kiya|pay|expense|grocery|dinner|lunch|petrol|chicken|medicine|bill|kharcha|li|liye)\b/i.test(text)) return -1;
   if (/\b(?:tomorrow|kal)\b/i.test(text) && /\b(?:will|karunga|karoon|doonga|dunga)\b/i.test(text)) return 1;
   return 0;
 }
@@ -226,6 +228,10 @@ export function interpretTransaction(input: string): Interpretation {
       needs_clarification: false,
       clarification_reason: null,
     };
+  }
+
+  if (isSalaryDeduction(text) && /\bsalary\b.*\b\d+(?:\.\d+)?\b.*\b(?:cut|deduct|minus)\b/i.test(text) && [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)].length > 1) {
+    return clarification("I found salary income and one or more deductions in the same message. I need to record these separately so your financial story stays correct.");
   }
 
   if (isSimpleSalaryIncome(text) && !isSalaryDeduction(text)) {
