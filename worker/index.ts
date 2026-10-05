@@ -43,6 +43,51 @@ async function getUser(env: Env, token: string): Promise<SupabaseUser | null> {
   return (await response.json()) as SupabaseUser;
 }
 
+async function getFinancialSummary(env: Env, token: string, userId: string) {
+  const params = new URLSearchParams({
+    select: "type,amount,currency",
+    user_id: "eq." + userId,
+    status: "eq.active",
+    limit: "1000",
+  });
+  const response = await supabaseRequest(env, "/rest/v1/transactions?" + params.toString(), token);
+  if (!response.ok) throw new Error("Unable to load financial summary.");
+  const rows = await response.json() as Array<{ type: string; amount: number | string; currency: string }>;
+
+  const summary = {
+    income: 0,
+    salary_deductions: 0,
+    expenses: 0,
+    net_recorded: 0,
+    currency: "PKR",
+    transaction_count: rows.length,
+  };
+
+  for (const row of rows) {
+    const amount = Number(row.amount);
+    if (!Number.isFinite(amount)) continue;
+    if (row.type === "income") summary.income += amount;
+    else if (row.type === "salary_deduction") summary.salary_deductions += amount;
+    else if (row.type === "expense") summary.expenses += amount;
+    if (row.currency) summary.currency = row.currency;
+  }
+
+  summary.net_recorded = summary.income - summary.salary_deductions - summary.expenses;
+  return summary;
+}
+
+async function handleFinancialSummary(request: Request, env: Env) {
+  const token = bearerToken(request);
+  if (!token) return json({ error: "Authentication required." }, 401);
+  const user = await getUser(env, token);
+  if (!user?.id) return json({ error: "Invalid or expired session." }, 401);
+  try {
+    return json({ ok: true, summary: await getFinancialSummary(env, token, user.id) });
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Unable to load financial summary." }, 500);
+  }
+}
+
 async function listTransactions(env: Env, token: string, userId: string) {
   const params = new URLSearchParams({
     select: "id,type,amount,currency,description,transaction_date,transaction_at,created_at",
@@ -220,6 +265,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
     if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api" });
+    if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
