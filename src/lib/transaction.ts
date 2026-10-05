@@ -172,12 +172,12 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/\b(?:ki|ka|ke|wali|wale|waala|waali)\b\s*$/i, " ");
 
   return description
-    .replace(/^\s*(?:ki|ka|ke|wali|wale|waala|waali)\b/gi, " ")
+    .replace(/^\s*(?:ki|ka|ke|wali|wale|waala|waali|pe|par|se|mein|main)\b/gi, " ")
     .replace(/\b(?:se|say|pe|par|on|mein|main)\s+(?:pay|paid|kiya|diya|diye|liya|liye|li)\b/gi, " ")
     .replace(/\b(?:pay|paid|kiya|diya|diye|liya|liye|li)\b\s*$/gi, " ")
     .replace(/\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho)\b/gi, " ")
     .replace(/\b(?:ki|ka|ke|wali|wale|waala|waali)\b(?=\s+(?:medicine|grocery|groceries|bill|mobile|dinner|lunch|petrol|chicken|chai|snacks))\b/gi, " ")
-    .replace(/^[-,:]+|[-,:]+$/g, "")
+    .replace(/^\s*[-,:]+\s*|\s*[-,:]+\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
