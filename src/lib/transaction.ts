@@ -17,7 +17,7 @@ export type Interpretation = {
   description: string | null;
   account: string | null;
   transaction_time: string | null;
-  date_offset: number;
+  date_offset: number | null;
   salary_deduction: boolean;
   confidence: number;
   needs_clarification: boolean;
@@ -54,17 +54,16 @@ function hasComplexFinancialMeaning(text: string) {
 }
 
 function resolveAccount(text: string) {
-  // Resolve explicit/named accounts before generic payment words.
-  // In phrases such as "cash nahi tha isliye alfalah cc pe", "cash" is
-  // negated, so it must not override the explicit Alfalah credit card.
   const namedAccount = accountAliases
     .filter(({ account }) => account !== "Cash" && account !== "Credit Card")
     .find(({ pattern }) => pattern.test(text));
   if (namedAccount) return namedAccount.account;
 
-  const hasNegatedCash = /\bcash\b[^.!?]{0,40}\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b/i.test(text)
-    || /\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b[^.!?]{0,20}\bcash\b/i.test(text);
-  if (!hasNegatedCash && /\\bcash\\b/i.test(text)) return "Cash";
+  const hasNegatedCash =
+    /\bcash\b[^.!?]{0,40}\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b/i.test(text) ||
+    /\b(?:nahi|nahin|na)\s+(?:tha|thi|the|hai|hota|hoti|ho|thay)\b[^.!?]{0,20}\bcash\b/i.test(text);
+
+  if (!hasNegatedCash && /\bcash\b/i.test(text)) return "Cash";
 
   return accountAliases.find(({ pattern, account }) => account === "Credit Card" && pattern.test(text))?.account ?? null;
 }
@@ -76,6 +75,23 @@ function parseDateOffset(text: string): number {
 }
 
 function parseTime(text: string): string | null {
+  const daypart = text.match(/\b(raat|night|shaam|evening|dopahar|afternoon|subah|morning)\s*(?:ko)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b/i);
+  if (daypart) {
+    const part = daypart[1].toLowerCase();
+    const hour = Number(daypart[2]);
+    const minute = daypart[3] ? Number(daypart[3]) : 0;
+    const suffix = daypart[4]?.toLowerCase() ?? "";
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23 || minute > 59) return null;
+    let normalizedHour = hour;
+    if (suffix === "pm" && hour < 12) normalizedHour += 12;
+    if (suffix === "am" && hour === 12) normalizedHour = 0;
+    if (!suffix) {
+      if ((part === "raat" || part === "night" || part === "shaam" || part === "evening") && hour < 12) normalizedHour += 12;
+      if ((part === "subah" || part === "morning") && hour === 12) normalizedHour = 0;
+    }
+    return String(normalizedHour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  }
+
   const patterns = [
     /\b(?:on|at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
     /\b(?:on|at)\s+(\d{1,2}):(\d{2})\s*(am|pm)?\b/i,
@@ -92,12 +108,9 @@ function parseTime(text: string): string | null {
   if (!match) return null;
 
   const hour = Number(match[1]);
-  const suffix = match[0].toLowerCase();
-  const ampm = suffix.match(/\b(am|pm)\b/i)?.[1]?.toLowerCase();
-  const hasBajeSuffix = /\bbaje\b/i.test(suffix);
-  const minute = match[2] && !hasBajeSuffix ? Number(match[2]) : 0;
-
-  if (Number.isNaN(hour) || Number.isNaN(minute) || minute > 59) return null;
+  const minute = match[2] && /^\d{2}$/.test(match[2]) ? Number(match[2]) : 0;
+  const ampm = match[3]?.toLowerCase() ?? null;
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute > 59) return null;
 
   let normalizedHour = hour;
   if (ampm) {
@@ -136,10 +149,11 @@ function numberFromToken(text: string, index: number, token: string) {
 
 function cleanDescription(text: string, account: string | null) {
   let description = text
-    .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, "")
+    .replace(/^\s*(?:spent|paid|bought|purchase|expense)\s+/i, " ")
     .replace(/\b\d+(?:\.\d+)?\s*(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\s*(?:ki|ka|ke)?\b/gi, " ")
     .replace(/\b(?:today|aaj|yesterday|kal)\b/gi, " ")
-    .replace(/\b(?:on|at)\s+(?:\d{1,2})(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b(?:on|at)\s+\d{1,2}(?::\d{2}|\d{2})?\s*(?:am|pm)?\b/gi, " ")
+    .replace(/\b(?:raat|night|shaam|evening|dopahar|afternoon|subah|morning)\s*(?:ko)?\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|baje)?\b/gi, " ")
     .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi, " ")
     .replace(/\b\d{1,2}\s*(?:am|pm|baje)\b/gi, " ")
     .replace(/\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b/gi, " ")
@@ -147,14 +161,19 @@ function cleanDescription(text: string, account: string | null) {
     .replace(/\b\d+(?:\.\d+)?\b/g, " ")
     .replace(/\b(?:hazar|hazaar|thousand|k|lakh|lac|lacs)\b/gi, " ");
 
-  for (const alias of accountAliases) {
-    description = description.replace(alias.pattern, " ");
-  }
-  description = description.replace(/\b(?:card|cc|credit\s*card)\s+(?:se|say|pe|pay|par|on|from)\b/gi, " ");
+  for (const alias of accountAliases) description = description.replace(alias.pattern, " ");
+  description = description
+    .replace(/\b(?:cash|cash\s+mein|cash\s+se)\b/gi, " ")
+    .replace(/\b(?:card|cc|credit\s*card)\s+(?:se|say|pe|pay|par|on|from)\b/gi, " ")
+    .replace(/\b(?:isliye|therefore)\b/gi, " ")
+    .replace(/\s+(?:mein|main|pe|par|se|say|on)\s*$/i, " ")
+    .replace(/\b(?:diye|diya|liya|liye|pay|paid|kiya|hua|hue)\b\s*$/i, " ")
+    .replace(/\b(?:ki|ka|ke|wali|wale|waala|waali)\b\s*$/i, " ");
 
-  if (account) description = description.replace(/\s+/g, " ").trim();
-
-  return description.replace(/^[-,:]+|[-,:]+$/g, "").replace(/\s+/g, " ").trim();
+  return description
+    .replace(/^[-,:]+|[-,:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function clarification(reason: string): Interpretation {
@@ -165,7 +184,7 @@ function clarification(reason: string): Interpretation {
     description: null,
     account: null,
     transaction_time: null,
-    date_offset: 0,
+    date_offset: null,
     salary_deduction: false,
     confidence: 0,
     needs_clarification: true,
@@ -262,7 +281,7 @@ export function interpretTransaction(input: string): Interpretation {
     transaction_time,
     date_offset,
     salary_deduction: false,
-    confidence: 0.96,
+    confidence: Math.min(0.97, 0.82 + (account ? 0.08 : 0) + (transaction_time ? 0.05 : 0) + (date_offset !== 0 ? 0.02 : 0)),
     needs_clarification: false,
     clarification_reason: null,
   };
