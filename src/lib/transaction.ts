@@ -38,6 +38,16 @@ function isSalaryDeduction(text: string) {
   return /\b(?:cut|deducted|deduct|minus)\s+(?:from\s+)?salary\b|\bsalary\s+(?:se|say)\s+(?:cut|deduct(?:ed)?)\b/i.test(text);
 }
 
+function isSimpleSalaryIncome(text: string) {
+  return /\bsalary\b.*\b\d+(?:\.\d+)?\b.*\b(?:received|receive|mili|mila|mile|ayi|aayi|aaye|credited|credit|got|mili hai|mila hai)\b/i.test(text)
+    || /\bsalary\s+\d+(?:\.\d+)?\s*(?:received|receive|mili|mila|ayi|aayi|aaye|credited|credit|got)?\s*$/i.test(text);
+}
+
+function isAccountTransfer(text: string) {
+  return /\b(?:transfer|transferred)\b/i.test(text)
+    || /\b(?:cash|bank|account)\b.*\b(?:mein|main|to)\b.*\b(?:transfer|move|shift)\b/i.test(text);
+}
+
 function hasComplexFinancialMeaning(text: string) {
   return [
     /\b(?:withdraw|withdrawal|cash\s+nikal|nikal(?:a|e|i)?)\b.*\b(?:bank|account)\b/i,
@@ -216,6 +226,29 @@ export function interpretTransaction(input: string): Interpretation {
       needs_clarification: false,
       clarification_reason: null,
     };
+  }
+
+  if (isSimpleSalaryIncome(text) && !isSalaryDeduction(text)) {
+    const amountMatch = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)][0];
+    if (amountMatch) {
+      return {
+        intent: "income",
+        amount: Number(amountMatch[0]),
+        currency: "PKR",
+        description: "Salary",
+        account: null,
+        transaction_time: null,
+        date_offset: parseDateOffset(text),
+        salary_deduction: false,
+        confidence: 0.98,
+        needs_clarification: false,
+        clarification_reason: null,
+      };
+    }
+  }
+
+  if (isAccountTransfer(text)) {
+    return clarification("This sounds like money moving between your own accounts, not an expense. I need the source and destination accounts before recording it.");
   }
 
   if (hasComplexFinancialMeaning(text)) {
