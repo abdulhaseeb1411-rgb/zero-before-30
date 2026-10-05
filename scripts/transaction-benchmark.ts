@@ -27,7 +27,22 @@ const cases: Expectation[] = [
   { input: "Amjad ki medicine 4800 maine pay ki, usko December mein wapas deni hai", label: "money owed to user", check: r => r.needs_clarification && /lent|expect back|person/i.test(r.clarification_reason ?? "") },
   { input: "cousin Hanif se 25000 mile, November mein wapas karne hain", label: "borrowed money asks", check: r => r.needs_clarification },
   { input: "800 lunch Anees ke saath, usne mere paise baad mein dene hain", label: "reimbursement asks", check: r => r.needs_clarification && /lent|expect back|person/i.test(r.clarification_reason ?? "") },
-  { input: "5000 cash nikale bank se, kharcha nahi hua", label: "withdrawal is not expense", check: r => r.needs_clarification }
+  { input: "5000 cash nikale bank se, kharcha nahi hua", label: "withdrawal is not expense", check: r => r.needs_clarification },
+  { input: "salary 95000 received", label: "natural salary income", check: r => r.intent === "income" && r.amount === 95000 },
+  { input: "aaj salary 90000 account mein ayi", label: "salary roman urdu", check: r => r.intent === "income" && r.amount === 90000 },
+  { input: "salary se 20000 bijli cut hui", label: "salary deduction variant", check: r => r.intent === "salary_deduction" && r.amount === 20000 },
+  { input: "tax 5000 salary se cut hua", label: "tax deduction", check: r => r.intent === "salary_deduction" && r.amount === 5000 },
+  { input: "aaj petrol 1800 cash diya", label: "simple roman urdu expense", check: r => r.intent === "expense" && r.amount === 1800 && r.account === "Cash" && /petrol/i.test(r.description ?? "") },
+  { input: "grocery 3200 alfalah card pe", label: "named card grocery", check: r => r.intent === "expense" && r.amount === 3200 && r.account === "Bank Alfalah Credit Card" },
+  { input: "subah 8 baje nashta 650 cash", label: "morning time", check: r => r.intent === "expense" && r.amount === 650 && r.transaction_time === "08:00" && r.account === "Cash" },
+  { input: "kal shaam 7 baje dinner 2400 cash", label: "evening relative time", check: r => r.intent === "expense" && r.amount === 2400 && r.transaction_time === "19:00" && r.date_offset === -1 },
+  { input: "5000 bank se cash nikale", label: "bank withdrawal", check: r => r.needs_clarification },
+  { input: "cash se bank mein 10000 transfer kiye", label: "account transfer", check: r => r.needs_clarification },
+  { input: "Ali ko 5000 udhaar diye", label: "new loan to person", check: r => r.needs_clarification },
+  { input: "Ali se 5000 udhaar liye", label: "borrowed from person", check: r => r.needs_clarification },
+  { input: "Amjad ko 4800 medicine ke diye, wapas lene hain", label: "receivable expense", check: r => r.needs_clarification },
+  { input: "2000 refund mila", label: "refund", check: r => r.needs_clarification },
+  { input: "lunch 900 card pe", label: "generic card", check: r => r.intent === "expense" && r.amount === 900 && r.account === "Credit Card" }
 ];
 
 let passed = 0;
