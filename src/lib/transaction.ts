@@ -230,12 +230,13 @@ export function interpretTransaction(input: string): Interpretation {
     };
   }
 
-  if (isSalaryDeduction(text) && /\bsalary\b.*\b\d+(?:\.\d+)?\b.*\b(?:cut|deduct|minus)\b/i.test(text) && [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)].length > 1) {
+  const numericAmounts = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)];
+  if (/\bsalary\b/i.test(text) && isSalaryDeduction(text) && numericAmounts.length > 1) {
     return clarification("I found salary income and one or more deductions in the same message. I need to record these separately so your financial story stays correct.");
   }
 
   if (isSimpleSalaryIncome(text) && !isSalaryDeduction(text)) {
-    const amountMatch = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)][0];
+    const amountMatch = numericAmounts[0];
     if (amountMatch) {
       return {
         intent: "income",
@@ -274,7 +275,7 @@ export function interpretTransaction(input: string): Interpretation {
   }
 
   const ranges = timeRanges(text);
-  const amountCandidates = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)]
+  const amountCandidates = numericAmounts
     .filter((match) => {
       const index = match.index ?? 0;
       return !ranges.some(([start, end]) => index >= start && index < end);
