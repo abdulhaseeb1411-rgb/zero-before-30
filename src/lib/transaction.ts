@@ -97,7 +97,7 @@ function parseTime(text: string): string | null {
     let normalizedHour = hour;
     if (suffix === "pm" && hour < 12) normalizedHour += 12;
     if (suffix === "am" && hour === 12) normalizedHour = 0;
-    if (!suffix) {
+    if (!suffix || suffix === "baje") {
       if ((part === "raat" || part === "night" || part === "shaam" || part === "evening") && hour < 12) normalizedHour += 12;
       if ((part === "subah" || part === "morning") && hour === 12) normalizedHour = 0;
     }
