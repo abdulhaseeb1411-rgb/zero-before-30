@@ -87,7 +87,7 @@ function parseDateOffset(text: string): number {
 }
 
 function parseTime(text: string): string | null {
-  const daypart = text.match(/\b(raat|night|shaam|evening|dopahar|afternoon|subah|morning)\s*(?:ko)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b/i);
+  const daypart = text.match(/\b(raat|night|shaam|evening|dopahar|afternoon|subah|morning)\s+(?:ko\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b/i);
   if (daypart) {
     const part = daypart[1].toLowerCase();
     const hour = Number(daypart[2]);
@@ -231,7 +231,7 @@ export function interpretTransaction(input: string): Interpretation {
   }
 
   const numericAmounts = [...text.matchAll(/\b\d+(?:\.\d+)?\b/g)];
-  if (/\bsalary\b/i.test(text) && isSalaryDeduction(text) && numericAmounts.length > 1) {
+  if (/\bsalary\b/i.test(text) && numericAmounts.length > 1 && /\b(?:cut|deduct(?:ed)?|minus)\b/i.test(text)) {
     return clarification("I found salary income and one or more deductions in the same message. I need to record these separately so your financial story stays correct.");
   }
 
