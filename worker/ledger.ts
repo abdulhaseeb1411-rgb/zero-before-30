@@ -170,7 +170,7 @@ async function recordLoan(ctx: Ctx, r: Interpretation, type: "lent" | "borrowed"
   if ("ask" in account) return { ok: false, ask: account.ask };
   const tx = await insertTransaction(ctx, {
     user_id: ctx.userId, type, amount: r.amount, currency: r.currency ?? "PKR", person_id: resolved.person.id,
-    description: r.description, account_id: account.id, status: "active", ...when(ctx, r),
+    description: r.description ?? (type === "lent" ? "Lent to " : "Borrowed from ") + resolved.person.name, account_id: account.id, status: "active", ...when(ctx, r),
   });
   return { ok: true, kind: type, transaction_id: tx.id, message: loanMsg[type][lang(r)](resolved.person.name, r.amount ?? 0), details: { person: resolved.person.name, amount: r.amount } };
 }
@@ -186,7 +186,7 @@ async function recordSettlement(ctx: Ctx, r: Interpretation): Promise<LedgerOutc
     method: "POST",
     body: JSON.stringify({
       p_person_id: person.id, p_direction: r.direction, p_amount: r.amount, p_currency: r.currency ?? "PKR",
-      p_date: when(ctx, r).transaction_date, p_at: when(ctx, r).transaction_at, p_description: r.description, p_account_id: account.id,
+      p_date: when(ctx, r).transaction_date, p_at: when(ctx, r).transaction_at, p_description: r.description ?? (r.direction === "they_paid_me" ? person.name + " paid back" : "Paid back " + person.name), p_account_id: account.id,
     }),
   });
   if (!response.ok) {
@@ -223,7 +223,7 @@ async function recordTransfer(ctx: Ctx, r: Interpretation): Promise<LedgerOutcom
   if (from.account.id === to.account.id) return { ok: false, ask: "The source and destination are the same account." };
   const tx = await insertTransaction(ctx, {
     user_id: ctx.userId, type: "transfer", amount: r.amount, currency: r.currency ?? "PKR",
-    source_account_id: from.account.id, destination_account_id: to.account.id, description: r.description, status: "active", ...when(ctx, r),
+    source_account_id: from.account.id, destination_account_id: to.account.id, description: r.description ?? "Transfer: " + from.account.name + " to " + to.account.name, status: "active", ...when(ctx, r),
   });
   const m: Record<Lang, string> = {
     en: "Recorded: moved " + rs(r.amount ?? 0) + " from " + from.account.name + " to " + to.account.name + ". Not counted as income or expense.",
