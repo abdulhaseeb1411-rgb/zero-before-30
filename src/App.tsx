@@ -31,6 +31,12 @@ type Transaction = {
   created_at: string;
 };
 
+function signFor(type: string) {
+  if (type === "income" || type === "borrowed") return "+";
+  if (type === "settlement" || type === "transfer") return "↔";
+  return "−";
+}
+
 async function authRequest(path: string, body: Record<string, string>) {
   const response = await fetch(SUPABASE_URL + "/auth/v1/" + path, {
     method: "POST",
@@ -199,7 +205,7 @@ export default function App() {
         setInput("");
         return;
       }
-      setMessage("Recorded: " + body.interpretation.description + " - Rs " + body.interpretation.amount + ".");
+      setMessage(body.message || "Recorded: " + body.interpretation.description + " - Rs " + body.interpretation.amount + ".");
       setInput("");
       setPendingInput(null);
       await loadTransactions(session);
@@ -302,7 +308,7 @@ export default function App() {
                   <span>{transaction.type} · {transaction.transaction_date}</span>
                 </div>
                 <strong className="transaction-amount">
-                  {transaction.type === "income" ? "+" : "−"} {transaction.currency} {Number(transaction.amount).toLocaleString("en-PK")}
+                  {signFor(transaction.type)} {transaction.currency} {Number(transaction.amount).toLocaleString("en-PK")}
                 </strong>
               </article>
             ))}
