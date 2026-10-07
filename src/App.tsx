@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const SUPABASE_URL = "https://jipucjufzyznnavmbvzx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OURbMvlxbJsmX8WTwb5Z3A_k3On9OLg";
-const AUTH_REDIRECT_URL = "https://z30-webhook.abdulhaseeb1411.workers.dev";
+const AUTH_REDIRECT_URL = window.location.origin;
 
 const navItems = [
   { label: "Home", icon: "⌂", active: true },
