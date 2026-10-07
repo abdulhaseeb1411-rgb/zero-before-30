@@ -1,4 +1,6 @@
-import { interpretTransaction, validateInterpretation } from "../src/lib/transaction";
+import { interpretTransaction, validateInterpretation, type Interpretation } from "../src/lib/transaction";
+import { interpretWithAi } from "../src/lib/ai";
+import { evalCases, MUST_CLARIFY, type EvalCase } from "../src/lib/eval-cases";
 
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
@@ -184,6 +186,23 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
   return categories.find((category) => category.name.toLowerCase().startsWith("other")) ?? null;
 }
 
+function pakistanTodayIso() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", weekday: "long", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+// AI first. If the AI is unavailable or fails, fall back to the conservative regex interpreter.
+async function interpret(env: Env, input: string): Promise<{ result: Interpretation; source: "ai" | "regex"; usage: { input_tokens: number; output_tokens: number } | null }> {
+  if (env.OPENAI_API_KEY) {
+    try {
+      const ai = await interpretWithAi(env.OPENAI_API_KEY, input, pakistanTodayIso(), AbortSignal.timeout(10000));
+      return { result: ai.interpretation, source: "ai", usage: ai.usage };
+    } catch (error) {
+      console.error("AI interpretation failed, using regex fallback:", error instanceof Error ? error.message : "unknown");
+    }
+  }
+  return { result: interpretTransaction(input), source: "regex", usage: null };
+}
+
 function pakistanNow() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
 }
@@ -281,7 +300,8 @@ async function handleTransaction(request: Request, env: Env) {
     || request.headers.get("X-Client-Request-Id")?.trim()
     || crypto.randomUUID();
 
-  const result = interpretTransaction(input);
+  if (input.length > 300) return json({ error: "Entries can be up to 300 characters." }, 400);
+  const { result } = await interpret(env, input);
   const validation = validateInterpretation(result);
 
   if (!validation.valid) {
@@ -331,11 +351,63 @@ async function handleTransaction(request: Request, env: Env) {
   }
 }
 
+const EVAL_TOKEN_SHA256 = "259d818922ff3fd355b2f9eac41cb1edbc6f8b2cd382b37e847c8707943e20a9";
+
+function scoreCase(e: EvalCase, r: Interpretation): "correct" | "clarified" | "wrong" {
+  const clarified = r.needs_clarification;
+  if (e.kind === "clarify") return clarified ? "correct" : "wrong";
+  if (clarified) return e.clarify_ok ? "clarified" : "wrong";
+  if (r.intent !== e.intent) return "wrong";
+  if (e.amount !== undefined && r.amount !== e.amount) return "wrong";
+  if (e.account !== undefined && r.account !== e.account) return "wrong";
+  if (e.person !== undefined && (r.person ?? "").toLowerCase() !== e.person.toLowerCase()) return "wrong";
+  return "correct";
+}
+
+// TEMPORARY: CEO accuracy/cost test. Protected by a one-time token (hash only in code). Remove after the test.
+async function handleEval(request: Request, env: Env) {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))).map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (digest !== EVAL_TOKEN_SHA256) return json({ error: "Not found." }, 404);
+  if (!env.OPENAI_API_KEY) return json({ error: "AI key missing." }, 500);
+  const started = Date.now();
+  const rows: Array<{ e: EvalCase; r: Interpretation | null; ms: number; usage: { input_tokens: number; output_tokens: number } | null; err?: string }> = [];
+  const queue = [...evalCases];
+  async function worker() {
+    for (let e = queue.shift(); e; e = queue.shift()) {
+      const t0 = Date.now();
+      try {
+        const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), AbortSignal.timeout(20000));
+        rows.push({ e, r: ai.interpretation, ms: Date.now() - t0, usage: ai.usage });
+      } catch (error) {
+        rows.push({ e, r: null, ms: Date.now() - t0, usage: null, err: error instanceof Error ? error.message : "error" });
+      }
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  let correct = 0, clarified = 0, wrong = 0, wrongDir = 0, mustOk = 0, errors = 0, tin = 0, tout = 0, msTotal = 0;
+  const failures: unknown[] = [];
+  for (const { e, r, ms, usage, err } of rows) {
+    msTotal += ms;
+    tin += usage?.input_tokens ?? 0; tout += usage?.output_tokens ?? 0;
+    if (!r) { errors++; wrong++; failures.push({ id: e.id, input: e.input, err }); continue; }
+    const s = scoreCase(e, r);
+    if (s === "correct") correct++; else if (s === "clarified") clarified++; else { wrong++; failures.push({ id: e.id, input: e.input, want: e.kind === "clarify" ? "clarify" : e.intent + ":" + e.amount, got: r.needs_clarification ? "clarify: " + r.clarification_reason : r.intent + ":" + r.amount + ":" + r.account + ":" + r.person }); }
+    if (e.kind === "record" && !r.needs_clarification && r.intent !== e.intent) wrongDir++;
+    if (e.kind === "clarify" && !r.needs_clarification) wrongDir++;
+    if (MUST_CLARIFY.has(e.id) && r.needs_clarification) mustOk++;
+  }
+  const n = evalCases.length;
+  const usd = (tin * 0.1 + tout * 0.5) / 1_000_000;
+  return json({ n, correct, appropriately_clarified: clarified, wrong, errors, correct_or_clarified_pct: Math.round(((correct + clarified) / n) * 1000) / 10, must_ask_clarified: mustOk + "/" + MUST_CLARIFY.size, wrong_direction: wrongDir, avg_latency_ms: Math.round(msTotal / n), tokens_in: tin, tokens_out: tout, avg_in: Math.round(tin / n), avg_out: Math.round(tout / n), cost_usd_total: Number(usd.toFixed(6)), cost_usd_per_entry: Number((usd / n).toFixed(7)), wall_ms: Date.now() - started, failures });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
     if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY) });
+    if (url.pathname === "/api/_eval" && request.method === "GET") return handleEval(request, env);
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
