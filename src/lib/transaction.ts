@@ -351,7 +351,9 @@ export function validateInterpretation(result: Interpretation) {
     return { valid: false, reason: "How did you pay?" };
   }
 
-  if (!result.amount || result.amount <= 0) {
+  // Void, query and account-only corrections carry no amount of their own.
+  const amountOptional = result.intent === "void" || result.intent === "query" || result.intent === "correction";
+  if (!amountOptional && (!result.amount || result.amount <= 0)) {
     return { valid: false, reason: "I need a valid amount." };
   }
 
