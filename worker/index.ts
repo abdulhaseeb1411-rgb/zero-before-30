@@ -228,14 +228,46 @@ async function createTransaction(env: Env, token: string, userId: string, result
   return Array.isArray(rows) ? rows[0] : rows;
 }
 
-async function recordInputEvent(env: Env, token: string, userId: string, rawText: string, result: ReturnType<typeof interpretTransaction>, status: string, clientRequestId: string, transactionId: string | null = null) {
+async function reserveInputEvent(env: Env, token: string, userId: string, rawText: string, result: ReturnType<typeof interpretTransaction>, status: "received" | "needs_clarification", clientRequestId: string) {
   const response = await supabaseRequest(env, "/rest/v1/input_events", token, {
-    method: "POST", headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ user_id: userId, raw_text: rawText, channel: "web", parsed_result: result, confidence: result.confidence, status, transaction_id: transactionId, client_request_id: clientRequestId }),
+    method: "POST",
+    headers: { Prefer: "return=representation,resolution=ignore-duplicates" },
+    body: JSON.stringify({
+      user_id: userId,
+      raw_text: rawText,
+      channel: "web",
+      parsed_result: result,
+      confidence: result.confidence,
+      status,
+      transaction_id: null,
+      client_request_id: clientRequestId,
+    }),
   });
-  if (!response.ok) console.error("input_events write failed", await response.text());
+  if (!response.ok) throw new Error("Unable to reserve transaction request.");
+  const rows = await response.json() as Array<{ id: string; status: string; transaction_id: string | null; parsed_result: ReturnType<typeof interpretTransaction> }>;
+  if (rows[0]) return { created: true, event: rows[0] };
+
+  const params = new URLSearchParams({
+    select: "id,status,transaction_id,parsed_result",
+    user_id: "eq." + userId,
+    client_request_id: "eq." + clientRequestId,
+    limit: "1",
+  });
+  const existingResponse = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token);
+  if (!existingResponse.ok) throw new Error("Unable to inspect transaction request.");
+  const existingRows = await existingResponse.json() as Array<{ id: string; status: string; transaction_id: string | null; parsed_result: ReturnType<typeof interpretTransaction> }>;
+  return existingRows[0] ? { created: false, event: existingRows[0] } : null;
 }
 
+async function updateInputEvent(env: Env, token: string, userId: string, eventId: string, status: "recorded" | "failed", transactionId: string | null) {
+  const params = new URLSearchParams({ id: "eq." + eventId, user_id: "eq." + userId });
+  const response = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status, transaction_id: transactionId }),
+  });
+  if (!response.ok) console.error("input_events update failed", await response.text());
+}
 async function handleTransaction(request: Request, env: Env) {
   const token = bearerToken(request);
   if (!token) return json({ error: "Authentication required." }, 401);
@@ -248,69 +280,52 @@ async function handleTransaction(request: Request, env: Env) {
     || request.headers.get("X-Client-Request-Id")?.trim()
     || crypto.randomUUID();
 
-  // Idempotency: if the same client request reaches the Worker again,
-  // return the existing transaction instead of creating a duplicate.
-  const existingParams = new URLSearchParams({
-    select: "status,transaction_id,parsed_result",
-    user_id: "eq." + user.id,
-    client_request_id: "eq." + clientRequestId,
-    limit: "1",
-  });
-  const existingResponse = await supabaseRequest(
-    env,
-    "/rest/v1/input_events?" + existingParams.toString(),
-    token,
-  );
-  if (existingResponse.ok) {
-    const existingRows = await existingResponse.json() as Array<{
-      status: string;
-      transaction_id: string | null;
-      parsed_result: ReturnType<typeof interpretTransaction>;
-    }>;
-    const existing = existingRows[0];
-    if (existing) {
-      if (existing.status === "recorded" && existing.transaction_id) {
-        const transactionParams = new URLSearchParams({
-          select: "id,type,amount,currency,description,transaction_date,transaction_at,account_id",
-          id: "eq." + existing.transaction_id,
-          user_id: "eq." + user.id,
-          limit: "1",
-        });
-        const transactionResponse = await supabaseRequest(
-          env,
-          "/rest/v1/transactions?" + transactionParams.toString(),
-          token,
-        );
-        if (transactionResponse.ok) {
-          const rows = await transactionResponse.json();
-          if (Array.isArray(rows) && rows[0]) {
-            return json({ ok: true, transaction: rows[0], interpretation: existing.parsed_result, idempotent: true });
-          }
-        }
-      }
-      if (existing.status === "needs_clarification") {
-        return json({
-          ok: false,
-          needs_clarification: true,
-          clarification_reason: existing.parsed_result.clarification_reason,
-          interpretation: existing.parsed_result,
-          idempotent: true,
-        }, 422);
-      }
-    }
-  }
-
   const result = interpretTransaction(input);
   const validation = validateInterpretation(result);
+
   if (!validation.valid) {
-    await recordInputEvent(env, token, user.id, input, result, "needs_clarification", clientRequestId);
+    const reservation = await reserveInputEvent(env, token, user.id, input, result, "needs_clarification", clientRequestId);
+    if (!reservation) return json({ error: "Unable to reserve transaction request." }, 500);
+    if (!reservation.created) {
+      if (reservation.event.status === "needs_clarification") {
+        return json({ ok: false, needs_clarification: true, clarification_reason: reservation.event.parsed_result.clarification_reason, interpretation: reservation.event.parsed_result, idempotent: true }, 422);
+      }
+      if (reservation.event.status === "recorded" && reservation.event.transaction_id) {
+        return json({ ok: true, transaction_id: reservation.event.transaction_id, interpretation: reservation.event.parsed_result, idempotent: true });
+      }
+      return json({ ok: false, processing: true, idempotent: true }, 409);
+    }
     return json({ ok: false, needs_clarification: true, clarification_reason: validation.reason, interpretation: result }, 422);
   }
+
+  const reservation = await reserveInputEvent(env, token, user.id, input, result, "received", clientRequestId);
+  if (!reservation) return json({ error: "Unable to reserve transaction request." }, 500);
+  if (!reservation.created) {
+    if (reservation.event.status === "recorded" && reservation.event.transaction_id) {
+      const transactionParams = new URLSearchParams({
+        select: "id,type,amount,currency,description,transaction_date,transaction_at,account_id",
+        id: "eq." + reservation.event.transaction_id,
+        user_id: "eq." + user.id,
+        limit: "1",
+      });
+      const transactionResponse = await supabaseRequest(env, "/rest/v1/transactions?" + transactionParams.toString(), token);
+      if (transactionResponse.ok) {
+        const rows = await transactionResponse.json();
+        if (Array.isArray(rows) && rows[0]) return json({ ok: true, transaction: rows[0], interpretation: reservation.event.parsed_result, idempotent: true });
+      }
+    }
+    if (reservation.event.status === "needs_clarification") {
+      return json({ ok: false, needs_clarification: true, clarification_reason: reservation.event.parsed_result.clarification_reason, interpretation: reservation.event.parsed_result, idempotent: true }, 422);
+    }
+    return json({ ok: false, processing: true, idempotent: true }, 409);
+  }
+
   try {
     const transaction = await createTransaction(env, token, user.id, result);
-    await recordInputEvent(env, token, user.id, input, result, "recorded", clientRequestId, transaction?.id ?? null);
+    await updateInputEvent(env, token, user.id, reservation.event.id, "recorded", transaction?.id ?? null);
     return json({ ok: true, transaction, interpretation: result });
   } catch (error) {
+    await updateInputEvent(env, token, user.id, reservation.event.id, "failed", null);
     return json({ ok: false, error: error instanceof Error ? error.message : "Unable to record transaction." }, 422);
   }
 }
