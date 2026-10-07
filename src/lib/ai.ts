@@ -57,6 +57,7 @@ export function buildSystemPrompt(todayIso: string) {
     "",
     "Rules:",
     "- NEVER guess. Missing facts stay null. If meaning or a material fact is unclear, set needs_clarification true with ONE short question in clarification_reason, in the user's language style.",
+    "- A refund, return, reversal or cashback of money from an earlier purchase is NOT income and NOT an expense: set intent ambiguous, needs_clarification true, and ask which earlier purchase it relates to.",
     "- A bare name plus a number (for example 'Amjad 4800') is ambiguous: do not pick expense, income, lent or borrowed.",
     "- payment_text: the payment method exactly as the user wrote it (for example 'cash', 'alfalah cc', 'jazzcash'), or null if none was stated.",
     "- If NO payment method is stated, set account null and payment_text null and do NOT ask about it: the software applies the user's default or asks. Do NOT assume Cash. If a payment method IS stated but is not in the allowed account list (for example JazzCash, Easypaisa), set account null but keep payment_text.",
