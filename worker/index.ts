@@ -1,6 +1,6 @@
 import { interpretTransaction, validateInterpretation, type Interpretation } from "../src/lib/transaction";
 import { interpretWithAi } from "../src/lib/ai";
-import { evalCases, MUST_CLARIFY, type EvalCase } from "../src/lib/eval-cases";
+import { evalCases, type EvalCase } from "../src/lib/eval-cases";
 
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
@@ -366,40 +366,24 @@ function scoreCase(e: EvalCase, r: Interpretation): "correct" | "clarified" | "w
 
 // TEMPORARY: CEO accuracy/cost test. Protected by a one-time token (hash only in code). Remove after the test.
 async function handleEval(request: Request, env: Env) {
-  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const params = new URL(request.url).searchParams;
+  const token = params.get("token") ?? "";
   const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))).map((b) => b.toString(16).padStart(2, "0")).join("");
   if (digest !== EVAL_TOKEN_SHA256) return json({ error: "Not found." }, 404);
   if (!env.OPENAI_API_KEY) return json({ error: "AI key missing." }, 500);
-  const started = Date.now();
-  const rows: Array<{ e: EvalCase; r: Interpretation | null; ms: number; usage: { input_tokens: number; output_tokens: number } | null; err?: string }> = [];
-  const queue = [...evalCases];
-  async function worker() {
-    for (let e = queue.shift(); e; e = queue.shift()) {
-      const t0 = Date.now();
-      try {
-        const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), AbortSignal.timeout(20000));
-        rows.push({ e, r: ai.interpretation, ms: Date.now() - t0, usage: ai.usage });
-      } catch (error) {
-        rows.push({ e, r: null, ms: Date.now() - t0, usage: null, err: error instanceof Error ? error.message : "error" });
-      }
+  const from = Number(params.get("from") ?? 0), to = Number(params.get("to") ?? 14);
+  const slice = evalCases.slice(from, to);
+  const out = await Promise.all(slice.map(async (e) => {
+    const t0 = Date.now();
+    try {
+      const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), AbortSignal.timeout(20000));
+      const r = ai.interpretation;
+      return { id: e.id, s: scoreCase(e, r), i: r.intent, a: r.amount, ac: r.account, p: r.person, c: r.needs_clarification, cf: r.confidence, ms: Date.now() - t0, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens, why: r.needs_clarification ? r.clarification_reason : undefined };
+    } catch (error) {
+      return { id: e.id, s: "error", err: error instanceof Error ? error.message : "error" };
     }
-  }
-  await Promise.all([worker(), worker(), worker(), worker()]);
-  let correct = 0, clarified = 0, wrong = 0, wrongDir = 0, mustOk = 0, errors = 0, tin = 0, tout = 0, msTotal = 0;
-  const failures: unknown[] = [];
-  for (const { e, r, ms, usage, err } of rows) {
-    msTotal += ms;
-    tin += usage?.input_tokens ?? 0; tout += usage?.output_tokens ?? 0;
-    if (!r) { errors++; wrong++; failures.push({ id: e.id, input: e.input, err }); continue; }
-    const s = scoreCase(e, r);
-    if (s === "correct") correct++; else if (s === "clarified") clarified++; else { wrong++; failures.push({ id: e.id, input: e.input, want: e.kind === "clarify" ? "clarify" : e.intent + ":" + e.amount, got: r.needs_clarification ? "clarify: " + r.clarification_reason : r.intent + ":" + r.amount + ":" + r.account + ":" + r.person }); }
-    if (e.kind === "record" && !r.needs_clarification && r.intent !== e.intent) wrongDir++;
-    if (e.kind === "clarify" && !r.needs_clarification) wrongDir++;
-    if (MUST_CLARIFY.has(e.id) && r.needs_clarification) mustOk++;
-  }
-  const n = evalCases.length;
-  const usd = (tin * 0.1 + tout * 0.5) / 1_000_000;
-  return json({ n, correct, appropriately_clarified: clarified, wrong, errors, correct_or_clarified_pct: Math.round(((correct + clarified) / n) * 1000) / 10, must_ask_clarified: mustOk + "/" + MUST_CLARIFY.size, wrong_direction: wrongDir, avg_latency_ms: Math.round(msTotal / n), tokens_in: tin, tokens_out: tout, avg_in: Math.round(tin / n), avg_out: Math.round(tout / n), cost_usd_total: Number(usd.toFixed(6)), cost_usd_per_entry: Number((usd / n).toFixed(7)), wall_ms: Date.now() - started, failures });
+  }));
+  return json(out);
 }
 
 export default {
