@@ -4,12 +4,26 @@ const SUPABASE_URL = "https://jipucjufzyznnavmbvzx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OURbMvlxbJsmX8WTwb5Z3A_k3On9OLg";
 const AUTH_REDIRECT_URL = window.location.origin;
 
-const navItems = [
-  { label: "Home", icon: "⌂", active: true },
-  { label: "Activity", icon: "◷", active: false },
-  { label: "Reports", icon: "◒", active: false },
-  { label: "Settings", icon: "⚙", active: false },
+type Tab = "home" | "activity" | "people" | "settings";
+const navItems: { label: string; icon: string; tab: Tab }[] = [
+  { label: "Home", icon: "⌂", tab: "home" },
+  { label: "Activity", icon: "◷", tab: "activity" },
+  { label: "People", icon: "☺", tab: "people" },
+  { label: "Settings", icon: "⚙", tab: "settings" },
 ];
+
+type ActivityRow = { id: string; type: string; status: string; amount: number; currency: string; description: string | null; transaction_date: string };
+type PersonRow = { id: string; name: string };
+type BalanceRow = { person_id: string; currency: string; they_owe_me: number | string; i_owe_them: number | string };
+type AccountRow = { id: string; name: string; type: string; is_default: boolean };
+
+async function restGet<T>(session: { access_token: string }, path: string): Promise<T> {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+    headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + session.access_token },
+  });
+  if (!response.ok) throw new Error("Could not load this right now.");
+  return (await response.json()) as T;
+}
 
 type Session = { access_token: string; user: { id: string; email?: string } };
 type Summary = {
@@ -75,6 +89,12 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [tab, setTab] = useState<Tab>("home");
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [people, setPeople] = useState<PersonRow[]>([]);
+  const [balances, setBalances] = useState<BalanceRow[]>([]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [tabMessage, setTabMessage] = useState("");
 
   useEffect(() => {
     if (session) localStorage.setItem("z30_session", JSON.stringify(session));
@@ -127,6 +147,48 @@ export default function App() {
   }
 
 
+
+  async function loadTab(currentSession: Session, which: Tab) {
+    setTabMessage("");
+    try {
+      if (which === "activity") {
+        setActivity(await restGet<ActivityRow[]>(currentSession, "transactions?select=id,type,status,amount,currency,description,transaction_date&order=created_at.desc&limit=100"));
+      } else if (which === "people") {
+        const [p, b] = await Promise.all([
+          restGet<PersonRow[]>(currentSession, "people?select=id,name&order=name.asc"),
+          restGet<BalanceRow[]>(currentSession, "person_balances?select=person_id,currency,they_owe_me,i_owe_them"),
+        ]);
+        setPeople(p);
+        setBalances(b);
+      } else if (which === "settings") {
+        setAccounts(await restGet<AccountRow[]>(currentSession, "accounts?select=id,name,type,is_default&order=name.asc"));
+      }
+    } catch (error) {
+      setTabMessage(error instanceof Error ? error.message : "Could not load this right now.");
+    }
+  }
+
+  useEffect(() => {
+    if (session && tab !== "home") void loadTab(session, tab);
+  }, [session, tab]);
+
+  async function setDefaultAccount(accountId: string | null) {
+    if (!session) return;
+    setTabMessage("");
+    const headers = { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + session.access_token };
+    try {
+      const clear = await fetch(SUPABASE_URL + "/rest/v1/accounts?is_default=eq.true", { method: "PATCH", headers, body: JSON.stringify({ is_default: false }) });
+      if (!clear.ok) throw new Error("Could not update your default account.");
+      if (accountId) {
+        const set = await fetch(SUPABASE_URL + "/rest/v1/accounts?id=eq." + accountId, { method: "PATCH", headers, body: JSON.stringify({ is_default: true }) });
+        if (!set.ok) throw new Error("Could not update your default account.");
+      }
+      await loadTab(session, "settings");
+      setTabMessage(accountId ? "Default account updated." : "Default account cleared.");
+    } catch (error) {
+      setTabMessage(error instanceof Error ? error.message : "Could not update your default account.");
+    }
+  }
 
   async function signIn() {
     try {
@@ -258,6 +320,7 @@ export default function App() {
           <button className="avatar-button" aria-label="Sign out" onClick={signOut}>AH</button>
         </header>
 
+        {tab === "home" && (<>
         <section className="balance-card">
           <div>
             <p className="section-label">NET RECORDED</p>
@@ -314,10 +377,78 @@ export default function App() {
             ))}
           </div>
         </section>
+        </>)}
+
+        {tab === "activity" && (
+          <section className="today-section">
+            <div className="section-heading"><h2>Activity</h2><span>{activity.length} entries</span></div>
+            {tabMessage && <p className="interpreter-message">{tabMessage}</p>}
+            <div className="transaction-list">
+              {activity.length === 0 && !tabMessage && <p className="muted">Nothing recorded yet.</p>}
+              {activity.map((row) => (
+                <article className="transaction" key={row.id} style={row.status === "voided" ? { opacity: 0.45 } : undefined}>
+                  <div className="transaction-icon" aria-hidden="true">{(row.description || row.type).slice(0, 1).toUpperCase()}</div>
+                  <div className="transaction-copy">
+                    <strong style={row.status === "voided" ? { textDecoration: "line-through" } : undefined}>{row.description || row.type}</strong>
+                    <span>{row.type}{row.status === "voided" ? " · deleted" : ""} · {row.transaction_date}</span>
+                  </div>
+                  <strong className="transaction-amount">{signFor(row.type)} {row.currency} {Number(row.amount).toLocaleString("en-PK")}</strong>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === "people" && (
+          <section className="today-section">
+            <div className="section-heading"><h2>People</h2><span>who owes whom</span></div>
+            {tabMessage && <p className="interpreter-message">{tabMessage}</p>}
+            <div className="transaction-list">
+              {balances.length === 0 && !tabMessage && <p className="muted">When you lend or borrow money, balances with each person appear here.</p>}
+              {balances.map((b) => {
+                const name = people.find((p) => p.id === b.person_id)?.name ?? "Unknown";
+                const owedToMe = Number(b.they_owe_me);
+                const iOwe = Number(b.i_owe_them);
+                const settled = owedToMe === 0 && iOwe === 0;
+                return (
+                  <article className="transaction" key={b.person_id + b.currency}>
+                    <div className="transaction-icon" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</div>
+                    <div className="transaction-copy">
+                      <strong>{name}</strong>
+                      <span>{settled ? "settled" : owedToMe > 0 ? "owes you" : "you owe"}</span>
+                    </div>
+                    <strong className="transaction-amount">{settled ? "—" : b.currency + " " + (owedToMe > 0 ? owedToMe : iOwe).toLocaleString("en-PK")}</strong>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {tab === "settings" && (
+          <section className="today-section">
+            <div className="section-heading"><h2>Settings</h2><span>{session.user.email}</span></div>
+            <p className="section-label">DEFAULT ACCOUNT</p>
+            <p className="muted">When you don't say how you paid, Z30 records the entry here. If you mention cash or a card, that always wins.</p>
+            {tabMessage && <p className="interpreter-message">{tabMessage}</p>}
+            <div className="transaction-list">
+              {accounts.length === 0 && !tabMessage && <p className="muted">Accounts appear here once you mention them, for example "petrol 450 cash".</p>}
+              {accounts.map((a) => (
+                <article className="transaction" key={a.id}>
+                  <div className="transaction-copy"><strong>{a.name}</strong><span>{a.type}{a.is_default ? " · default" : ""}</span></div>
+                  {a.is_default
+                    ? <button className="secondary-button" onClick={() => void setDefaultAccount(null)}>Clear default</button>
+                    : <button className="secondary-button" onClick={() => void setDefaultAccount(a.id)}>Make default</button>}
+                </article>
+              ))}
+            </div>
+            <p style={{ marginTop: 24 }}><button className="secondary-button" onClick={signOut}>Sign out</button></p>
+          </section>
+        )}
 
         <nav className="bottom-nav" aria-label="Main navigation">
           {navItems.map((item) => (
-            <button className={item.active ? "nav-item active" : "nav-item"} key={item.label} type="button">
+            <button className={tab === item.tab ? "nav-item active" : "nav-item"} key={item.label} type="button" onClick={() => setTab(item.tab)}>
               <span className="nav-icon" aria-hidden="true">{item.icon}</span>
               <span>{item.label}</span>
             </button>
