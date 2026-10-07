@@ -184,7 +184,9 @@ export default function App() {
           Authorization: "Bearer " + session.access_token,
           "X-Client-Request-Id": crypto.randomUUID(),
         },
-        body: JSON.stringify({ input: transactionInput }),
+        body: JSON.stringify({
+          input: transactionInput,
+        }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
