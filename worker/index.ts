@@ -244,7 +244,62 @@ async function handleTransaction(request: Request, env: Env) {
   const body = await request.json().catch(() => null) as { input?: string; client_request_id?: string } | null;
   const input = body?.input?.trim();
   if (!input) return json({ error: "Input is required." }, 400);
-  const clientRequestId = body?.client_request_id?.trim() || crypto.randomUUID();
+  const clientRequestId = body?.client_request_id?.trim()
+    || request.headers.get("X-Client-Request-Id")?.trim()
+    || crypto.randomUUID();
+
+  // Idempotency: if the same client request reaches the Worker again,
+  // return the existing transaction instead of creating a duplicate.
+  const existingParams = new URLSearchParams({
+    select: "status,transaction_id,parsed_result",
+    user_id: "eq." + user.id,
+    client_request_id: "eq." + clientRequestId,
+    limit: "1",
+  });
+  const existingResponse = await supabaseRequest(
+    env,
+    "/rest/v1/input_events?" + existingParams.toString(),
+    token,
+  );
+  if (existingResponse.ok) {
+    const existingRows = await existingResponse.json() as Array<{
+      status: string;
+      transaction_id: string | null;
+      parsed_result: ReturnType<typeof interpretTransaction>;
+    }>;
+    const existing = existingRows[0];
+    if (existing) {
+      if (existing.status === "recorded" && existing.transaction_id) {
+        const transactionParams = new URLSearchParams({
+          select: "id,type,amount,currency,description,transaction_date,transaction_at,account_id",
+          id: "eq." + existing.transaction_id,
+          user_id: "eq." + user.id,
+          limit: "1",
+        });
+        const transactionResponse = await supabaseRequest(
+          env,
+          "/rest/v1/transactions?" + transactionParams.toString(),
+          token,
+        );
+        if (transactionResponse.ok) {
+          const rows = await transactionResponse.json();
+          if (Array.isArray(rows) && rows[0]) {
+            return json({ ok: true, transaction: rows[0], interpretation: existing.parsed_result, idempotent: true });
+          }
+        }
+      }
+      if (existing.status === "needs_clarification") {
+        return json({
+          ok: false,
+          needs_clarification: true,
+          clarification_reason: existing.parsed_result.clarification_reason,
+          interpretation: existing.parsed_result,
+          idempotent: true,
+        }, 422);
+      }
+    }
+  }
+
   const result = interpretTransaction(input);
   const validation = validateInterpretation(result);
   if (!validation.valid) {
