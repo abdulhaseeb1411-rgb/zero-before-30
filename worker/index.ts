@@ -145,6 +145,14 @@ async function findSingleCardAccount(env: Env, token: string, userId: string) {
   return rows.length === 1 ? rows[0] : null;
 }
 
+async function findDefaultAccount(env: Env, token: string, userId: string) {
+  const params = new URLSearchParams({ select: "id,name", user_id: "eq." + userId, is_default: "eq.true", is_active: "eq.true", limit: "1" });
+  const response = await supabaseRequest(env, "/rest/v1/accounts?" + params.toString(), token);
+  if (!response.ok) return null;
+  const rows = await response.json() as Array<{ id: string; name: string }>;
+  return rows[0] ?? null;
+}
+
 async function ensureCashAccount(env: Env, token: string, userId: string) {
   const existing = await findAccount(env, token, userId, "Cash");
   if (existing) return existing;
@@ -186,15 +194,19 @@ async function findCategory(env: Env, token: string, kind: "expense" | "income",
   return categories.find((category) => category.name.toLowerCase().startsWith("other")) ?? null;
 }
 
+function pakistanTodayYmd() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
 function pakistanTodayIso() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", weekday: "long", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Karachi", weekday: "long" }).format(new Date());
+  return weekday + " " + pakistanTodayYmd();
 }
 
 // AI first. If the AI is unavailable or fails, fall back to the conservative regex interpreter.
 async function interpret(env: Env, input: string): Promise<{ result: Interpretation; source: "ai" | "regex"; usage: { input_tokens: number; output_tokens: number } | null }> {
   if (env.OPENAI_API_KEY) {
     try {
-      const ai = await interpretWithAi(env.OPENAI_API_KEY, input, pakistanTodayIso(), AbortSignal.timeout(10000));
+      const ai = await interpretWithAi(env.OPENAI_API_KEY, input, pakistanTodayIso(), pakistanTodayYmd(), AbortSignal.timeout(10000));
       return { result: ai.interpretation, source: "ai", usage: ai.usage };
     } catch (error) {
       console.error("AI interpretation failed, using regex fallback:", error instanceof Error ? error.message : "unknown");
@@ -302,6 +314,11 @@ async function handleTransaction(request: Request, env: Env) {
 
   if (input.length > 300) return json({ error: "Entries can be up to 300 characters." }, 400);
   const { result } = await interpret(env, input);
+  // Explicit facts override defaults: the default account is applied only when NO payment method was stated.
+  if (result.intent === "expense" && !result.salary_deduction && !result.account && !result.needs_clarification && !result.payment_text) {
+    const fallback = await findDefaultAccount(env, token, user.id);
+    if (fallback) { result.account = fallback.name; result.account_defaulted = true; }
+  }
   const validation = validateInterpretation(result);
 
   if (!validation.valid) {
@@ -375,9 +392,9 @@ async function handleEval(request: Request, env: Env) {
   if (params.get("set") === "founder") {
     const rows = await Promise.all(founderInputs.slice(from, to).map(async (input, k) => {
       try {
-        const ai = await interpretWithAi(env.OPENAI_API_KEY!, input, pakistanTodayIso(), AbortSignal.timeout(20000));
+        const ai = await interpretWithAi(env.OPENAI_API_KEY!, input, pakistanTodayIso(), pakistanTodayYmd(), AbortSignal.timeout(20000));
         const r = ai.interpretation;
-        return { n: from + k + 1, in: input, i: r.intent, a: r.amount, ac: r.account, p: r.person, d: r.description, off: r.date_offset, t: r.transaction_time, c: r.needs_clarification, cf: r.confidence, why: r.clarification_reason, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens };
+        return { n: from + k + 1, in: input, i: r.intent, a: r.amount, ac: r.account, pt: r.payment_text, p: r.person, d: r.description, off: r.date_offset, t: r.transaction_time, c: r.needs_clarification, cf: r.confidence, why: r.clarification_reason, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens };
       } catch (error) {
         return { n: from + k + 1, in: input, err: error instanceof Error ? error.message : "error" };
       }
@@ -388,7 +405,7 @@ async function handleEval(request: Request, env: Env) {
   const out = await Promise.all(slice.map(async (e) => {
     const t0 = Date.now();
     try {
-      const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), AbortSignal.timeout(20000));
+      const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), pakistanTodayYmd(), AbortSignal.timeout(20000));
       const r = ai.interpretation;
       return { id: e.id, s: scoreCase(e, r), i: r.intent, a: r.amount, ac: r.account, p: r.person, c: r.needs_clarification, cf: r.confidence, ms: Date.now() - t0, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens, why: r.needs_clarification ? r.clarification_reason : undefined };
     } catch (error) {

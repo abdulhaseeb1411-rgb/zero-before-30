@@ -18,6 +18,8 @@ export type Interpretation = {
   description: string | null;
   account: string | null;
   person?: string | null;
+  payment_text?: string | null;
+  account_defaulted?: boolean;
   transaction_time: string | null;
   date_offset: number | null;
   salary_deduction: boolean;
