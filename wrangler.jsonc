@@ -11,6 +11,10 @@
       "/api/*"
     ]
   },
+  "routes": [
+    { "pattern": "zerobefore30.com", "custom_domain": true },
+    { "pattern": "www.zerobefore30.com", "custom_domain": true }
+  ],
   "compatibility_flags": [
     "nodejs_compat"
   ],
