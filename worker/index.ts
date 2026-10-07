@@ -1,6 +1,6 @@
 import { interpretTransaction, validateInterpretation, type Interpretation } from "../src/lib/transaction";
 import { interpretWithAi } from "../src/lib/ai";
-import { evalCases, type EvalCase } from "../src/lib/eval-cases";
+import { evalCases, founderInputs, type EvalCase } from "../src/lib/eval-cases";
 
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
@@ -372,6 +372,18 @@ async function handleEval(request: Request, env: Env) {
   if (digest !== EVAL_TOKEN_SHA256) return json({ error: "Not found." }, 404);
   if (!env.OPENAI_API_KEY) return json({ error: "AI key missing." }, 500);
   const from = Number(params.get("from") ?? 0), to = Number(params.get("to") ?? 14);
+  if (params.get("set") === "founder") {
+    const rows = await Promise.all(founderInputs.slice(from, to).map(async (input, k) => {
+      try {
+        const ai = await interpretWithAi(env.OPENAI_API_KEY!, input, pakistanTodayIso(), AbortSignal.timeout(20000));
+        const r = ai.interpretation;
+        return { n: from + k + 1, in: input, i: r.intent, a: r.amount, ac: r.account, p: r.person, d: r.description, off: r.date_offset, t: r.transaction_time, c: r.needs_clarification, cf: r.confidence, why: r.clarification_reason, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens };
+      } catch (error) {
+        return { n: from + k + 1, in: input, err: error instanceof Error ? error.message : "error" };
+      }
+    }));
+    return json(rows);
+  }
   const slice = evalCases.slice(from, to);
   const out = await Promise.all(slice.map(async (e) => {
     const t0 = Date.now();
