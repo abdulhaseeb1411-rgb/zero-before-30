@@ -5,6 +5,7 @@ export type Intent =
   | "lent"
   | "borrowed"
   | "transfer"
+  | "settlement"
   | "correction"
   | "void"
   | "query"
