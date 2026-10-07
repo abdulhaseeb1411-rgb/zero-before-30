@@ -18,7 +18,7 @@ const INTENTS: Intent[] = ["expense", "income", "salary_deduction", "lent", "bor
 const schema = {
   type: "object",
   additionalProperties: false,
-  required: ["intent", "amount", "currency", "description", "account", "person", "payment_text", "transaction_time", "date", "confidence", "needs_clarification", "clarification_reason"],
+  required: ["intent", "amount", "currency", "description", "account", "person", "payment_text", "to_account", "direction", "target_text", "target_amount", "query_type", "period", "reply_language", "transaction_time", "date", "confidence", "needs_clarification", "clarification_reason"],
   properties: {
     intent: { type: "string", enum: INTENTS },
     amount: { type: ["number", "null"] },
@@ -27,6 +27,13 @@ const schema = {
     account: { type: ["string", "null"], enum: [...KNOWN_ACCOUNTS, null] },
     person: { type: ["string", "null"] },
     payment_text: { type: ["string", "null"] },
+    to_account: { type: ["string", "null"], enum: [...KNOWN_ACCOUNTS, null] },
+    direction: { type: ["string", "null"], enum: ["they_paid_me", "i_paid_them", null] },
+    target_text: { type: ["string", "null"] },
+    target_amount: { type: ["number", "null"] },
+    query_type: { type: ["string", "null"], enum: ["spent", "income", "remaining", "owed_to_me", "i_owe", "last_entries", null] },
+    period: { type: ["string", "null"], enum: ["today", "yesterday", "this_week", "this_month", "last_month", "all", null] },
+    reply_language: { type: "string", enum: ["en", "roman_ur", "ur"] },
     transaction_time: { type: ["string", "null"] },
     date: { type: ["string", "null"] },
     confidence: { type: "number" },
@@ -69,7 +76,14 @@ export function buildSystemPrompt(todayIso: string) {
     "- date: the exact calendar date the money moved, as YYYY-MM-DD, or null if the user said nothing about a date (means today). Resolve aaj/today, kal/yesterday (for past events), parso, '10 september', '5 sept ko', and numeric dates against today's date. Pakistan writes numeric dates day/month/year, so 02/09/26 is 2 September 2026. A day and month with no year means the most recent past occurrence. Never output a future date; if the user means the future, set needs_clarification.",
     "- transaction_time: 24h 'HH:MM' only if the user said a time, else null. Convert raat/shaam/subah/dopahar sensibly.",
     "- confidence: 0 to 1, how sure you are of the whole interpretation. Use below 0.7 whenever you are unsure.",
-    "- For lent/borrowed/settlement/transfer/correction/void/query fill what you can (amount, person, account) and leave the rest null.",
+    "- reply_language: the language the user wrote in: en, roman_ur (Urdu in Latin letters, or mixed), or ur (Urdu script). Write clarification_reason in that language.",
+    "- settlement: direction is they_paid_me when the other person gave money back to the user ('Ali ne 3000 wapas kiye', 'Ali returned 3000'), and i_paid_them when the user gave money back ('maine Ahmed ko 4000 wapis kiye', 'paid back Hanif'). If it is not clear who paid whom, set direction null and needs_clarification true. person is required.",
+    "- lent/borrowed: person is the other party's name exactly as written (keep the user's spelling and script). If only a generic word like 'dost' or 'friend' is given with no name, set person null and ask who. amount is required. A due date is not needed. description is optional (what it was for).",
+    "- transfer: account is the source and to_account the destination, both from the allowed list; if either is not clearly stated or not allowed, leave null and ask. 'bank se cash nikala' with no named bank account means the source bank is unknown: set account null.",
+    "- correction: amount is the NEW correct amount; target_amount is the OLD wrong amount if the user mentioned it; target_text is a short keyword for which entry (for example 'petrol'), or null if the user means the latest entry. Pattern 'X tha, Y nahi' / 'it was X not Y' means the NEW amount is X and the OLD amount is Y. If the user is also changing the payment account, set account to the new one.",
+    "- void: target_text and/or target_amount identify the entry to delete ('last petrol entry' gives target_text 'petrol'; 'last entry' gives both null). Do not invent a target.",
+    "- query: query_type is spent (expenses), income, remaining (income minus spending), owed_to_me (money others owe the user), i_owe, or last_entries. period is today, yesterday, this_week, this_month, last_month or all; use this_month when a spending question names no period, and all for owed_to_me / i_owe. person is set if the question is about one person. query needs no amount.",
+    "- For fields that do not apply to the intent, use null.",
   ].join("\n");
 }
 
@@ -114,10 +128,31 @@ export function normalizeAiOutput(raw: Record<string, unknown>, todayYmd: string
   const paymentText = clean(raw.payment_text);
   if (intent === "expense" && account === null && paymentText) { needs = true; reason = "I don't have a payment method called \"" + paymentText + "\". Which account did you use: Cash or one of your cards?"; }
   if (recordable && !clean(raw.description)) { needs = true; reason = reason ?? "What was this for?"; }
-  if (!recordable && intent !== "ambiguous" && !needs) {
-    needs = true;
-    reason = "I understood this as " + intent.replace("_", " ") + ", but I can't record that type yet.";
+  const person = clean(raw.person);
+  const direction = raw.direction === "they_paid_me" || raw.direction === "i_paid_them" ? raw.direction : null;
+  const toAccount = KNOWN_ACCOUNTS.includes(raw.to_account as (typeof KNOWN_ACCOUNTS)[number]) ? (raw.to_account as string) : null;
+  const targetAmountRaw = typeof raw.target_amount === "number" && Number.isFinite(raw.target_amount) && raw.target_amount > 0 ? raw.target_amount : null;
+  const queryType = ["spent", "income", "remaining", "owed_to_me", "i_owe", "last_entries"].includes(raw.query_type as string) ? (raw.query_type as string) : null;
+  const period = ["today", "yesterday", "this_week", "this_month", "last_month", "all"].includes(raw.period as string) ? (raw.period as string) : null;
+  const replyLanguage = raw.reply_language === "roman_ur" || raw.reply_language === "ur" ? raw.reply_language : "en";
+
+  if (!needs && (intent === "lent" || intent === "borrowed")) {
+    if (!person) { needs = true; reason = reason ?? "Who is this with?"; }
+    else if (amount === null) { needs = true; reason = reason ?? "I need a valid amount."; }
   }
+  if (!needs && intent === "settlement") {
+    if (!person) { needs = true; reason = reason ?? "Who is this repayment with?"; }
+    else if (amount === null) { needs = true; reason = reason ?? "I need a valid amount."; }
+    else if (!direction) { needs = true; reason = reason ?? "Who paid whom: did " + person + " pay you, or did you pay " + person + "?"; }
+  }
+  if (!needs && intent === "transfer") {
+    if (amount === null) { needs = true; reason = reason ?? "I need a valid amount."; }
+    else if (!account || !toAccount) { needs = true; reason = reason ?? "Which account did the money move from, and to?"; }
+    else if (account === toAccount) { needs = true; reason = "The source and destination are the same account."; }
+  }
+  if (!needs && intent === "correction" && amount === null && !account) { needs = true; reason = reason ?? "What should the corrected amount be?"; }
+  if (!needs && intent === "query" && !queryType) { needs = true; reason = reason ?? "What would you like to know about your money?"; }
+
   if (needs && !reason) reason = "I need a little more detail to record this.";
 
   return {
@@ -126,8 +161,15 @@ export function normalizeAiOutput(raw: Record<string, unknown>, todayYmd: string
     currency: clean(raw.currency) ?? "PKR",
     description: clean(raw.description),
     account: intent === "salary_deduction" || intent === "income" ? null : account,
-    person: clean(raw.person),
+    person,
     payment_text: paymentText,
+    to_account: toAccount,
+    direction,
+    target_text: clean(raw.target_text),
+    target_amount: targetAmountRaw,
+    query_type: queryType,
+    period,
+    reply_language: replyLanguage,
     transaction_time: time,
     date_offset: dateOk ? offsetRaw : null,
     salary_deduction: intent === "salary_deduction",

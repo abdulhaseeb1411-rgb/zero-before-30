@@ -1,5 +1,6 @@
 import { interpretTransaction, validateInterpretation, type Interpretation } from "../src/lib/transaction";
 import { interpretWithAi } from "../src/lib/ai";
+import { ensureAccount, handleLedgerIntent, type Ctx } from "./ledger";
 
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
@@ -88,57 +89,12 @@ async function handleListTransactions(request: Request, env: Env) {
   }
 }
 
-async function findAccount(env: Env, token: string, userId: string, name: string) {
-  const params = new URLSearchParams({
-    select: "id,name,type,currency,is_active",
-    user_id: "eq." + userId,
-    name: "eq." + name,
-    is_active: "eq.true",
-    limit: "1",
-  });
-  const response = await supabaseRequest(env, "/rest/v1/accounts?" + params.toString(), token);
-  if (!response.ok) throw new Error("Unable to read accounts.");
-  const rows = await response.json() as Array<{ id: string; name: string; type: string; currency: string; is_active: boolean }>;
-  return rows[0] ?? null;
-}
-
-async function findSingleCardAccount(env: Env, token: string, userId: string) {
-  const params = new URLSearchParams({
-    select: "id,name,type,currency,is_active",
-    user_id: "eq." + userId,
-    type: "eq.card",
-    is_active: "eq.true",
-    limit: "2",
-  });
-  const response = await supabaseRequest(env, "/rest/v1/accounts?" + params.toString(), token);
-  if (!response.ok) throw new Error("Unable to read card accounts.");
-  const rows = await response.json() as Array<{ id: string; name: string; type: string; currency: string; is_active: boolean }>;
-  return rows.length === 1 ? rows[0] : null;
-}
-
 async function findDefaultAccount(env: Env, token: string, userId: string) {
   const params = new URLSearchParams({ select: "id,name", user_id: "eq." + userId, is_default: "eq.true", is_active: "eq.true", limit: "1" });
   const response = await supabaseRequest(env, "/rest/v1/accounts?" + params.toString(), token);
   if (!response.ok) return null;
   const rows = await response.json() as Array<{ id: string; name: string }>;
   return rows[0] ?? null;
-}
-
-async function ensureCashAccount(env: Env, token: string, userId: string) {
-  const existing = await findAccount(env, token, userId, "Cash");
-  if (existing) return existing;
-  const response = await supabaseRequest(env, "/rest/v1/accounts", token, {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ user_id: userId, name: "Cash", type: "cash", currency: "PKR", is_default: false, is_active: true }),
-  });
-  if (response.ok) {
-    const rows = await response.json() as Array<{ id: string; name: string; type: string; currency: string; is_active: boolean }>;
-    return rows[0] ?? null;
-  }
-  const retry = await findAccount(env, token, userId, "Cash");
-  if (retry) return retry;
-  throw new Error("Unable to create the Cash account.");
 }
 
 async function findCategory(env: Env, token: string, kind: "expense" | "income", description: string) {
@@ -198,20 +154,15 @@ function buildTransactionTimestamp(transactionTime: string | null, dateOffset: n
   return datePart + "T" + transactionTime + ":00+05:00";
 }
 
-async function createTransaction(env: Env, token: string, userId: string, result: ReturnType<typeof interpretTransaction>) {
+class AskError extends Error {}
+
+async function createTransaction(env: Env, token: string, userId: string, result: ReturnType<typeof interpretTransaction>, ctx: Ctx) {
   if (!result.amount || !result.currency || !result.description) throw new Error("Incomplete transaction interpretation.");
   let accountId: string | null = null;
-  if (result.intent === "expense") {
-    if (!result.salary_deduction) {
-      const accountName = result.account ?? "Cash";
-      const account = accountName === "Cash"
-        ? await ensureCashAccount(env, token, userId)
-        : accountName === "Credit Card"
-          ? await findSingleCardAccount(env, token, userId)
-          : await findAccount(env, token, userId, accountName);
-      accountId = account?.id ?? null;
-      if (!accountId) throw new Error("Payment account could not be resolved.");
-    }
+  if (result.intent === "expense" && !result.salary_deduction) {
+    const resolved = await ensureAccount(ctx, result.account ?? "Cash");
+    if ("ask" in resolved) throw new AskError(resolved.ask);
+    accountId = resolved.account.id;
   }
   const kind = result.intent === "income" ? "income" : "expense";
   const category = await findCategory(env, token, kind, result.description);
@@ -262,12 +213,12 @@ async function reserveInputEvent(env: Env, token: string, userId: string, rawTex
   return existingRows[0] ? { created: false, event: existingRows[0] } : null;
 }
 
-async function updateInputEvent(env: Env, token: string, userId: string, eventId: string, status: "received" | "recorded" | "failed", transactionId: string | null) {
+async function updateInputEvent(env: Env, token: string, userId: string, eventId: string, status: "received" | "recorded" | "failed" | "answered" | "needs_clarification", transactionId: string | null, parsedResult?: unknown) {
   const params = new URLSearchParams({ id: "eq." + eventId, user_id: "eq." + userId });
   const response = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ status, transaction_id: transactionId }),
+    body: JSON.stringify(parsedResult === undefined ? { status, transaction_id: transactionId } : { status, transaction_id: transactionId, parsed_result: parsedResult }),
   });
   if (!response.ok) console.error("input_events update failed", await response.text());
 }
@@ -330,6 +281,10 @@ async function handleTransaction(request: Request, env: Env) {
   if (!reservation.created && isRetryable(reservation.event)) {
     await updateInputEvent(env, token, user.id, reservation.event.id, "received", null);
   } else if (!reservation.created) {
+    const stored = (reservation.event.parsed_result as unknown as { ledger?: { message: string; kind: string } })?.ledger;
+    if ((reservation.event.status === "recorded" || reservation.event.status === "answered") && stored) {
+      return json({ ok: true, kind: stored.kind, message: stored.message, transaction_id: reservation.event.transaction_id, interpretation: reservation.event.parsed_result, idempotent: true });
+    }
     if (reservation.event.status === "recorded" && reservation.event.transaction_id) {
       const transactionParams = new URLSearchParams({
         select: "id,type,amount,currency,description,transaction_date,transaction_at,account_id",
@@ -349,11 +304,34 @@ async function handleTransaction(request: Request, env: Env) {
     return json({ ok: false, processing: true, idempotent: true }, 409);
   }
 
+  const ctx: Ctx = { db: (path, init) => supabaseRequest(env, path, token, init), userId: user.id, today: pakistanTodayYmd(), rawText: input };
+
+  if (result.intent !== "expense" && result.intent !== "income" && result.intent !== "salary_deduction") {
+    try {
+      const outcome = await handleLedgerIntent(ctx, result);
+      if (!outcome.ok) {
+        await updateInputEvent(env, token, user.id, reservation.event.id, "needs_clarification", null, { ...result, needs_clarification: true, clarification_reason: outcome.ask });
+        return json({ ok: false, needs_clarification: true, clarification_reason: outcome.ask, interpretation: result }, 422);
+      }
+      const status = outcome.kind === "query" ? "answered" : "recorded";
+      await updateInputEvent(env, token, user.id, reservation.event.id, status, outcome.transaction_id, { ...result, ledger: { kind: outcome.kind, message: outcome.message, details: outcome.details } });
+      return json({ ok: true, kind: outcome.kind, message: outcome.message, transaction_id: outcome.transaction_id, details: outcome.details, interpretation: result });
+    } catch (error) {
+      console.error("ledger failure:", error instanceof Error ? error.message : "unknown");
+      await updateInputEvent(env, token, user.id, reservation.event.id, "failed", null);
+      return json({ ok: false, error: "I couldn't record that. Nothing was changed. Please try again." }, 422);
+    }
+  }
+
   try {
-    const transaction = await createTransaction(env, token, user.id, result);
+    const transaction = await createTransaction(env, token, user.id, result, ctx);
     await updateInputEvent(env, token, user.id, reservation.event.id, "recorded", transaction?.id ?? null);
     return json({ ok: true, transaction, interpretation: result });
   } catch (error) {
+    if (error instanceof AskError) {
+      await updateInputEvent(env, token, user.id, reservation.event.id, "needs_clarification", null, { ...result, needs_clarification: true, clarification_reason: error.message });
+      return json({ ok: false, needs_clarification: true, clarification_reason: error.message, interpretation: result }, 422);
+    }
     await updateInputEvent(env, token, user.id, reservation.event.id, "failed", null);
     return json({ ok: false, error: error instanceof Error ? error.message : "Unable to record transaction." }, 422);
   }

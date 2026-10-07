@@ -20,6 +20,13 @@ export type Interpretation = {
   person?: string | null;
   payment_text?: string | null;
   account_defaulted?: boolean;
+  to_account?: string | null;
+  direction?: "they_paid_me" | "i_paid_them" | null;
+  target_text?: string | null;
+  target_amount?: number | null;
+  query_type?: string | null;
+  period?: string | null;
+  reply_language?: "en" | "roman_ur" | "ur";
   transaction_time: string | null;
   date_offset: number | null;
   salary_deduction: boolean;
