@@ -335,7 +335,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
-    if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY), diag_env_names: Object.keys(env as unknown as Record<string, unknown>).sort() });
+    if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY) });
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
