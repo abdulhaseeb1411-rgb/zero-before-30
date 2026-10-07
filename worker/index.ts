@@ -3,6 +3,7 @@ import { interpretTransaction, validateInterpretation } from "../src/lib/transac
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
+  OPENAI_API_KEY?: string;
 };
 
 type SupabaseUser = { id: string; email?: string };
@@ -334,7 +335,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
-    if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api" });
+    if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY) });
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
