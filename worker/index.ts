@@ -1,6 +1,5 @@
 import { interpretTransaction, validateInterpretation, type Interpretation } from "../src/lib/transaction";
 import { interpretWithAi } from "../src/lib/ai";
-import { evalCases, founderInputs, type EvalCase } from "../src/lib/eval-cases";
 
 type Env = Cloudflare.Env & {
   SUPABASE_URL: string;
@@ -10,11 +9,8 @@ type Env = Cloudflare.Env & {
 
 type SupabaseUser = { id: string; email?: string };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-client-request-id",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+// The PWA and API are served from the same origin, so no cross-origin access is granted.
+const corsHeaders = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -46,37 +42,12 @@ async function getUser(env: Env, token: string): Promise<SupabaseUser | null> {
   return (await response.json()) as SupabaseUser;
 }
 
-async function getFinancialSummary(env: Env, token: string, userId: string) {
-  const params = new URLSearchParams({
-    select: "type,amount,currency",
-    user_id: "eq." + userId,
-    status: "eq.active",
-    limit: "1000",
-  });
-  const response = await supabaseRequest(env, "/rest/v1/transactions?" + params.toString(), token);
+async function getFinancialSummary(env: Env, token: string) {
+  const response = await supabaseRequest(env, "/rest/v1/rpc/z30_summary", token, { method: "POST", body: "{}" });
   if (!response.ok) throw new Error("Unable to load financial summary.");
-  const rows = await response.json() as Array<{ type: string; amount: number | string; currency: string }>;
-
-  const summary = {
-    income: 0,
-    salary_deductions: 0,
-    expenses: 0,
-    net_recorded: 0,
-    currency: "PKR",
-    transaction_count: rows.length,
-  };
-
-  for (const row of rows) {
-    const amount = Number(row.amount);
-    if (!Number.isFinite(amount)) continue;
-    if (row.type === "income") summary.income += amount;
-    else if (row.type === "salary_deduction") summary.salary_deductions += amount;
-    else if (row.type === "expense") summary.expenses += amount;
-    if (row.currency) summary.currency = row.currency;
-  }
-
-  summary.net_recorded = summary.income - summary.salary_deductions - summary.expenses;
-  return summary;
+  const row = await response.json() as { income: number | string; salary_deductions: number | string; expenses: number | string; transaction_count: number };
+  const income = Number(row.income), salary_deductions = Number(row.salary_deductions), expenses = Number(row.expenses);
+  return { income, salary_deductions, expenses, net_recorded: income - salary_deductions - expenses, currency: "PKR", transaction_count: row.transaction_count };
 }
 
 async function handleFinancialSummary(request: Request, env: Env) {
@@ -85,7 +56,7 @@ async function handleFinancialSummary(request: Request, env: Env) {
   const user = await getUser(env, token);
   if (!user?.id) return json({ error: "Invalid or expired session." }, 401);
   try {
-    return json({ ok: true, summary: await getFinancialSummary(env, token, user.id) });
+    return json({ ok: true, summary: await getFinancialSummary(env, token) });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Unable to load financial summary." }, 500);
   }
@@ -276,22 +247,22 @@ async function reserveInputEvent(env: Env, token: string, userId: string, rawTex
     }),
   });
   if (!response.ok) throw new Error("Unable to reserve transaction request.");
-  const rows = await response.json() as Array<{ id: string; status: string; transaction_id: string | null; parsed_result: ReturnType<typeof interpretTransaction> }>;
+  const rows = await response.json() as Array<{ id: string; status: string; transaction_id: string | null; created_at?: string; parsed_result: ReturnType<typeof interpretTransaction> }>;
   if (rows[0]) return { created: true, event: rows[0] };
 
   const params = new URLSearchParams({
-    select: "id,status,transaction_id,parsed_result",
+    select: "id,status,transaction_id,created_at,parsed_result",
     user_id: "eq." + userId,
     client_request_id: "eq." + clientRequestId,
     limit: "1",
   });
   const existingResponse = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token);
   if (!existingResponse.ok) throw new Error("Unable to inspect transaction request.");
-  const existingRows = await existingResponse.json() as Array<{ id: string; status: string; transaction_id: string | null; parsed_result: ReturnType<typeof interpretTransaction> }>;
+  const existingRows = await existingResponse.json() as Array<{ id: string; status: string; transaction_id: string | null; created_at?: string; parsed_result: ReturnType<typeof interpretTransaction> }>;
   return existingRows[0] ? { created: false, event: existingRows[0] } : null;
 }
 
-async function updateInputEvent(env: Env, token: string, userId: string, eventId: string, status: "recorded" | "failed", transactionId: string | null) {
+async function updateInputEvent(env: Env, token: string, userId: string, eventId: string, status: "received" | "recorded" | "failed", transactionId: string | null) {
   const params = new URLSearchParams({ id: "eq." + eventId, user_id: "eq." + userId });
   const response = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token, {
     method: "PATCH",
@@ -300,6 +271,23 @@ async function updateInputEvent(env: Env, token: string, userId: string, eventId
   });
   if (!response.ok) console.error("input_events update failed", await response.text());
 }
+const DAILY_ENTRY_LIMIT = 30;
+
+async function entriesToday(env: Env, token: string, userId: string) {
+  const start = pakistanTodayYmd() + "T00:00:00+05:00";
+  const params = new URLSearchParams({ select: "id", user_id: "eq." + userId, created_at: "gte." + start, limit: "1" });
+  const response = await supabaseRequest(env, "/rest/v1/input_events?" + params.toString(), token, { headers: { Prefer: "count=exact", Range: "0-0" } });
+  const range = response.headers.get("Content-Range") ?? "";
+  const total = Number(range.split("/")[1]);
+  return Number.isFinite(total) ? total : 0;
+}
+
+// A failed event, or one stuck in "received" for over a minute, may be retried with the same client_request_id.
+function isRetryable(event: { status: string; created_at?: string }) {
+  if (event.status === "failed") return true;
+  return event.status === "received" && !!event.created_at && Date.now() - Date.parse(event.created_at) > 60_000;
+}
+
 async function handleTransaction(request: Request, env: Env) {
   const token = bearerToken(request);
   if (!token) return json({ error: "Authentication required." }, 401);
@@ -313,6 +301,7 @@ async function handleTransaction(request: Request, env: Env) {
     || crypto.randomUUID();
 
   if (input.length > 300) return json({ error: "Entries can be up to 300 characters." }, 400);
+  if (await entriesToday(env, token, user.id) >= DAILY_ENTRY_LIMIT) return json({ error: "Daily limit of " + DAILY_ENTRY_LIMIT + " entries reached. It resets at midnight Pakistan time." }, 429);
   const { result } = await interpret(env, input);
   // Explicit facts override defaults: the default account is applied only when NO payment method was stated.
   if (result.intent === "expense" && !result.salary_deduction && !result.account && !result.needs_clarification && !result.payment_text) {
@@ -338,7 +327,9 @@ async function handleTransaction(request: Request, env: Env) {
 
   const reservation = await reserveInputEvent(env, token, user.id, input, result, "received", clientRequestId);
   if (!reservation) return json({ error: "Unable to reserve transaction request." }, 500);
-  if (!reservation.created) {
+  if (!reservation.created && isRetryable(reservation.event)) {
+    await updateInputEvent(env, token, user.id, reservation.event.id, "received", null);
+  } else if (!reservation.created) {
     if (reservation.event.status === "recorded" && reservation.event.transaction_id) {
       const transactionParams = new URLSearchParams({
         select: "id,type,amount,currency,description,transaction_date,transaction_at,account_id",
@@ -368,59 +359,11 @@ async function handleTransaction(request: Request, env: Env) {
   }
 }
 
-const EVAL_TOKEN_SHA256 = "259d818922ff3fd355b2f9eac41cb1edbc6f8b2cd382b37e847c8707943e20a9";
-
-function scoreCase(e: EvalCase, r: Interpretation): "correct" | "clarified" | "wrong" {
-  const clarified = r.needs_clarification;
-  if (e.kind === "clarify") return clarified ? "correct" : "wrong";
-  if (clarified) return e.clarify_ok ? "clarified" : "wrong";
-  if (r.intent !== e.intent) return "wrong";
-  if (e.amount !== undefined && r.amount !== e.amount) return "wrong";
-  if (e.account !== undefined && r.account !== e.account) return "wrong";
-  if (e.person !== undefined && (r.person ?? "").toLowerCase() !== e.person.toLowerCase()) return "wrong";
-  return "correct";
-}
-
-// TEMPORARY: CEO accuracy/cost test. Protected by a one-time token (hash only in code). Remove after the test.
-async function handleEval(request: Request, env: Env) {
-  const params = new URL(request.url).searchParams;
-  const token = params.get("token") ?? "";
-  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))).map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (digest !== EVAL_TOKEN_SHA256) return json({ error: "Not found." }, 404);
-  if (!env.OPENAI_API_KEY) return json({ error: "AI key missing." }, 500);
-  const from = Number(params.get("from") ?? 0), to = Number(params.get("to") ?? 14);
-  if (params.get("set") === "founder") {
-    const rows = await Promise.all(founderInputs.slice(from, to).map(async (input, k) => {
-      try {
-        const ai = await interpretWithAi(env.OPENAI_API_KEY!, input, pakistanTodayIso(), pakistanTodayYmd(), AbortSignal.timeout(20000));
-        const r = ai.interpretation;
-        return { n: from + k + 1, in: input, i: r.intent, a: r.amount, ac: r.account, pt: r.payment_text, p: r.person, d: r.description, off: r.date_offset, t: r.transaction_time, c: r.needs_clarification, cf: r.confidence, why: r.clarification_reason, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens };
-      } catch (error) {
-        return { n: from + k + 1, in: input, err: error instanceof Error ? error.message : "error" };
-      }
-    }));
-    return json(rows);
-  }
-  const slice = evalCases.slice(from, to);
-  const out = await Promise.all(slice.map(async (e) => {
-    const t0 = Date.now();
-    try {
-      const ai = await interpretWithAi(env.OPENAI_API_KEY!, e.input, pakistanTodayIso(), pakistanTodayYmd(), AbortSignal.timeout(20000));
-      const r = ai.interpretation;
-      return { id: e.id, s: scoreCase(e, r), i: r.intent, a: r.amount, ac: r.account, p: r.person, c: r.needs_clarification, cf: r.confidence, ms: Date.now() - t0, ti: ai.usage?.input_tokens, to: ai.usage?.output_tokens, why: r.needs_clarification ? r.clarification_reason : undefined };
-    } catch (error) {
-      return { id: e.id, s: "error", err: error instanceof Error ? error.message : "error" };
-    }
-  }));
-  return json(out);
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     const url = new URL(request.url);
     if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY) });
-    if (url.pathname === "/api/_eval" && request.method === "GET") return handleEval(request, env);
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
