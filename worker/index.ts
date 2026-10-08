@@ -222,7 +222,7 @@ async function updateInputEvent(env: Env, token: string, userId: string, eventId
   });
   if (!response.ok) console.error("input_events update failed", await response.text());
 }
-const DAILY_ENTRY_LIMIT = 30;
+const DAILY_ENTRY_LIMIT = 60;
 
 async function entriesToday(env: Env, token: string, userId: string) {
   const start = pakistanTodayYmd() + "T00:00:00+05:00";
