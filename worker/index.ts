@@ -337,6 +337,23 @@ async function handleTransaction(request: Request, env: Env) {
   }
 }
 
+async function handleBetaSignup(request: Request, env: Env) {
+  let body: { email?: unknown; name?: unknown; note?: unknown; website?: unknown };
+  try { body = await request.json(); } catch { return json({ error: "Invalid request." }, 400); }
+  if (body.website) return json({ ok: true }); // honeypot: bots fill this hidden field
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) return json({ error: "Please enter a valid email." }, 400);
+  const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 100) : null;
+  const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
+  const response = await fetch(new URL("/rest/v1/beta_signups", env.SUPABASE_URL), {
+    method: "POST",
+    headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: "Bearer " + env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify({ email, name, note }),
+  });
+  if (response.ok || response.status === 409) return json({ ok: true }); // duplicate email counts as already signed up
+  return json({ error: "Could not save your sign-up right now. Please try again." }, 500);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -345,6 +362,7 @@ export default {
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
     if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
+    if (url.pathname === "/api/beta-signup" && request.method === "POST") return handleBetaSignup(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
     return env.ASSETS.fetch(request);
   },

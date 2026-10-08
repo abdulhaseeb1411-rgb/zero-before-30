@@ -1,14 +1,129 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111111" />
-    <meta name="description" content="Zero Before 30 — understand where your money is going." />
-    <title>Zero Before 30</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#111111" />
+<title>Zero Before 30 — tell it what happened to your money</title>
+<meta name="description" content="Write what happened to your money in plain English or Roman Urdu. Zero Before 30 records it for you: expenses, salary, money lent and borrowed. Private beta signup open." />
+<meta property="og:title" content="Zero Before 30" />
+<meta property="og:description" content="Describe your money in your own words. We record it. Private beta signup open." />
+<meta property="og:url" content="https://zerobefore30.com" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<style>
+:root{--bg:#f4f4f1;--ink:#111;--muted:#5d5d58;--card:#fff;--line:#e2e2dc;--accent:#111;--accent-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141414;--ink:#f2f2ee;--muted:#a3a39c;--card:#1d1d1d;--line:#2d2d2d;--accent:#f2f2ee;--accent-ink:#111}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
+.brand{font-weight:800;letter-spacing:.08em;font-size:13px}
+header a.signin{color:var(--ink);font-size:15px;text-decoration:none;border:1px solid var(--line);padding:8px 14px;border-radius:999px}
+h1{font-size:clamp(34px,7vw,56px);line-height:1.08;margin:36px 0 16px;letter-spacing:-.02em}
+h2{font-size:26px;margin:0 0 14px;letter-spacing:-.01em}
+.lead{font-size:19px;color:var(--muted);margin:0 0 28px;max-width:34em}
+section{padding:36px 0;border-top:1px solid var(--line)}
+.chat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:grid;gap:10px;margin:8px 0 4px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.said{font-weight:600}
+.got{color:var(--muted);font-size:15px}
+.steps{display:grid;gap:14px;padding:0;margin:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 16px 56px;position:relative}
+.steps li:before{content:counter(s);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:14px}
+ul.plain{padding-left:20px;margin:0}
+ul.plain li{margin:6px 0}
+form{display:grid;gap:10px;margin-top:14px}
+input,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;width:100%}
+button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:14px 18px;cursor:pointer}
+button:disabled{opacity:.6}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+#msg{min-height:1.4em;font-size:15px}
+footer{padding:30px 0 50px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
+.note{font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">ZERO BEFORE 30</span>
+    <a class="signin" href="/app">Open the app</a>
+  </header>
+
+  <h1>Tell it what happened to your money.</h1>
+  <p class="lead">Write it the way you would say it, in English or Roman Urdu. Zero Before 30 records it. No forms, no categories to pick, no spreadsheets.</p>
+  <p><a href="#beta"><button type="button">Join the private beta</button></a></p>
+
+  <section>
+    <h2>Say it. It's recorded.</h2>
+    <div class="chat" aria-label="Examples">
+      <div class="row"><span class="said">petrol 450 cash</span><span class="got">Expense, Rs 450, paid in cash</span></div>
+      <div class="row"><span class="said">salary 120000 aayi</span><span class="got">Income, Rs 120,000</span></div>
+      <div class="row"><span class="said">Ali ko 5000 diye</span><span class="got">Money lent to Ali, Rs 5,000</span></div>
+      <div class="row"><span class="said">Ali ne 2000 wapas kiye</span><span class="got">Ali paid back Rs 2,000, so he owes Rs 3,000</span></div>
+      <div class="row"><span class="said">HBL se cash 10000 nikale</span><span class="got">Transfer between your accounts, not an expense</span></div>
+    </div>
+    <p class="note">Examples of how the beta interprets entries. If something is unclear, such as "Amjad 4800", it asks instead of guessing.</p>
+  </section>
+
+  <section>
+    <h2>Why it's different from a budgeting app</h2>
+    <p>Most money in a salary earner's life is not just "spending". It's money lent to a friend, borrowed from a cousin, cash taken out of the bank, a repayment coming back. Z30 treats each of these as what it really is, so you can always see who owes you, who you owe, and what is left of your income.</p>
+    <ul class="plain">
+      <li>Expenses and income</li>
+      <li>Money you lent, and money you borrowed, tracked person by person</li>
+      <li>Repayments linked to the original loan</li>
+      <li>Transfers between your own accounts, kept out of your spending</li>
+      <li>Fix a mistake or undo an entry; nothing is silently erased</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><strong>You write one line.</strong> Any mix of English, Roman Urdu or Urdu.</li>
+      <li><strong>Z30 understands it.</strong> If one important detail is missing, it asks one short question.</li>
+      <li><strong>It's recorded and you can undo it.</strong> Your balances and totals come from your recorded entries, not from guesses.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Where it is today</h2>
+    <p>Z30 is in a small private beta. It works in your browser on your phone or computer and can be added to your home screen. English and Roman Urdu work today; Urdu script is still being tested and may make mistakes. We are looking for people who will use it for real and tell us what is wrong.</p>
+    <p class="note">Your entries are private to your account. No payment details are asked for.</p>
+  </section>
+
+  <section id="beta">
+    <h2>Join the private beta</h2>
+    <p>Leave your email. We'll send you an invite when your place opens. We will use your email only for the beta.</p>
+    <form id="f" novalidate>
+      <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+      <input type="email" name="email" placeholder="Your email" required autocomplete="email" />
+      <input type="text" name="name" placeholder="Your name (optional)" autocomplete="name" maxlength="100" />
+      <textarea name="note" rows="3" maxlength="500" placeholder="How do you keep track of money today? (optional)"></textarea>
+      <button id="b" type="submit">Request an invite</button>
+      <div id="msg" role="status"></div>
+    </form>
+  </section>
+
+  <footer>Zero Before 30 · Made in Pakistan · <a href="/app" style="color:inherit">Open the app</a></footer>
+</div>
+<script>
+(function(){
+  var f=document.getElementById('f'),m=document.getElementById('msg'),b=document.getElementById('b');
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    var d=new FormData(f),email=(d.get('email')||'').toString().trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){m.textContent='Please enter a valid email.';return}
+    b.disabled=true;m.textContent='Sending…';
+    fetch('/api/beta-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,name:d.get('name'),note:d.get('note'),website:d.get('website')})})
+      .then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j}})})
+      .then(function(x){
+        if(x.ok){f.reset();m.textContent='Thank you. You are on the list. We will email you when your invite is ready.'}
+        else{m.textContent=(x.j&&x.j.error)||'Something went wrong. Please try again.';b.disabled=false}
+      })
+      .catch(function(){m.textContent='Could not reach the server. Please try again.';b.disabled=false});
+  });
+})();
+</script>
+</body>
 </html>

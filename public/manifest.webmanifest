@@ -1,7 +1,7 @@
 {
   "name": "Zero Before 30",
   "short_name": "Z30",
-  "start_url": "/",
+  "start_url": "/app",
   "display": "standalone",
   "background_color": "#f4f4f1",
   "theme_color": "#111111",
