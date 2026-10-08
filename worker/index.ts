@@ -239,6 +239,8 @@ function isRetryable(event: { status: string; created_at?: string }) {
   return event.status === "received" && !!event.created_at && Date.now() - Date.parse(event.created_at) > 60_000;
 }
 
+const aiTiming = new WeakMap<Request, number>();
+
 async function handleTransaction(request: Request, env: Env) {
   const token = bearerToken(request);
   if (!token) return json({ error: "Authentication required." }, 401);
@@ -253,7 +255,9 @@ async function handleTransaction(request: Request, env: Env) {
 
   if (input.length > 300) return json({ error: "Entries can be up to 300 characters." }, 400);
   if (await entriesToday(env, token, user.id) >= DAILY_ENTRY_LIMIT) return json({ error: "Daily limit of " + DAILY_ENTRY_LIMIT + " entries reached. It resets at midnight Pakistan time." }, 429);
+  const aiStart = Date.now();
   const { result } = await interpret(env, input);
+  aiTiming.set(request, Date.now() - aiStart);
   // Explicit facts override defaults: the default account is applied only when NO payment method was stated.
   if (result.intent === "expense" && !result.salary_deduction && !result.account && !result.needs_clarification && !result.payment_text) {
     const fallback = await findDefaultAccount(env, token, user.id);
@@ -361,7 +365,13 @@ export default {
     if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, service: "z30-api", ai_key_configured: Boolean(env.OPENAI_API_KEY) });
     if (url.pathname === "/api/summary" && request.method === "GET") return handleFinancialSummary(request, env);
     if (url.pathname === "/api/transactions" && request.method === "GET") return handleListTransactions(request, env);
-    if (url.pathname === "/api/transactions" && request.method === "POST") return handleTransaction(request, env);
+    if (url.pathname === "/api/transactions" && request.method === "POST") {
+      const t0 = Date.now();
+      const res = await handleTransaction(request, env);
+      const out = new Response(res.body, res);
+      out.headers.set("Server-Timing", "ai;dur=" + (aiTiming.get(request) ?? 0) + ", total;dur=" + (Date.now() - t0));
+      return out;
+    }
     if (url.pathname === "/api/beta-signup" && request.method === "POST") return handleBetaSignup(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
     return env.ASSETS.fetch(request);
