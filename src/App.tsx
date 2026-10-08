@@ -161,7 +161,7 @@ export default function App() {
         ]);
         setPeople(p);
         setBalances(b);
-      } else if (which === "settings") {
+      } else if (which === "settings" || which === "home") {
         setAccounts(await restGet<AccountRow[]>(currentSession, "accounts?select=id,name,type,is_default&order=name.asc"));
       }
     } catch (error) {
@@ -170,7 +170,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (session && tab !== "home") void loadTab(session, tab);
+    if (session) void loadTab(session, tab);
   }, [session, tab]);
 
   async function setDefaultAccount(accountId: string | null) {
@@ -345,7 +345,7 @@ export default function App() {
         {tab === "home" && (<>
         <section className="balance-card">
           <div>
-            <p className="section-label">NET RECORDED</p>
+            <p className="section-label">REMAINING FROM RECORDED INCOME</p>
             <p className="balance">{summary ? summary.currency + " " + Math.round(summary.net_recorded).toLocaleString("en-PK") : "Rs 0"}</p>
             <p className="muted">{summary ? "income minus recorded deductions and expenses" : "loading your money story..."}</p>
           </div>
@@ -379,6 +379,13 @@ export default function App() {
             </p>
           )}
         </section>
+
+        {accounts.length > 0 && !accounts.some((a) => a.is_default) && (
+          <p className="interpreter-message">
+            Tip: choose a default account so entries without a payment method are recorded there.
+            <button className="secondary-button" style={{ marginLeft: 10 }} onClick={() => setTab("settings")}>Choose</button>
+          </p>
+        )}
 
         <section className="today-section">
           <div className="section-heading">
