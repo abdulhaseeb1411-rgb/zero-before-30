@@ -90,6 +90,7 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [tab, setTab] = useState<Tab>("home");
+  const [undoId, setUndoId] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [balances, setBalances] = useState<BalanceRow[]>([]);
@@ -190,6 +191,24 @@ export default function App() {
     }
   }
 
+  async function undoLast() {
+    if (!session || !undoId) return;
+    try {
+      const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/update_transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ p_transaction_id: undoId, p_changes: { status: "voided" }, p_reason: "User tapped Undo" }),
+      });
+      if (!response.ok) throw new Error("Could not undo this entry.");
+      setUndoId(null);
+      setMessage("Undone. It stays in your history as deleted.");
+      await loadTransactions(session);
+      await loadSummary(session);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not undo this entry.");
+    }
+  }
+
   async function signIn() {
     try {
       const next = await authRequest("token?grant_type=password", { email: email.trim(), password });
@@ -243,6 +262,7 @@ export default function App() {
     if (!session || !input.trim() || sending) return;
     setSending(true);
     setMessage("");
+    setUndoId(null);
     try {
       const transactionInput = pendingInput ? pendingInput + " " + input.trim() : input.trim();
       const response = await fetch("/api/transactions", {
@@ -268,6 +288,8 @@ export default function App() {
         return;
       }
       setMessage(body.message || "Recorded: " + body.interpretation.description + " - Rs " + body.interpretation.amount + ".");
+      const undoable = ["lent", "borrowed", "transfer"];
+      setUndoId(body.transaction?.id ?? (undoable.includes(body.kind) ? body.transaction_id : null) ?? null);
       setInput("");
       setPendingInput(null);
       await loadTransactions(session);
@@ -339,7 +361,7 @@ export default function App() {
               value={input}
               onChange={(event) => {
                 setInput(event.target.value);
-                setMessage("");
+                if (!undoId) setMessage("");
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void submit();
@@ -350,7 +372,12 @@ export default function App() {
             </button>
           </div>
           <p className="hint">{pendingInput ? "Payment method for: " + pendingInput : "Try “petrol 450 cash”"}</p>
-          {message && <p className="interpreter-message">{message}</p>}
+          {message && (
+            <p className="interpreter-message">
+              {message}
+              {undoId && <button className="secondary-button" style={{ marginLeft: 10 }} onClick={() => void undoLast()}>Undo</button>}
+            </p>
+          )}
         </section>
 
         <section className="today-section">
