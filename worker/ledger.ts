@@ -81,6 +81,7 @@ async function createPerson(ctx: Ctx, name: string) {
 const accountTypes: Record<string, string> = {
   "Cash": "cash", "Bank Alfalah Credit Card": "card", "HBL Credit Card": "card", "UBL Credit Card": "card",
   "JS Bank Credit Card": "card", "Meezan": "bank", "Credit Card": "card",
+  "HBL": "bank", "Bank Alfalah": "bank", "UBL": "bank", "JS Bank": "bank",
 };
 
 type Account = { id: string; name: string; type: string };
