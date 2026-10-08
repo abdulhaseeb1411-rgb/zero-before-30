@@ -3,111 +3,258 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#111111" />
+<meta name="theme-color" content="#0c1f1a" />
 <title>Zero Before 30 — tell it what happened to your money</title>
-<meta name="description" content="Write what happened to your money in plain English or Roman Urdu. Zero Before 30 records it for you: expenses, salary, money lent and borrowed. Private beta signup open." />
+<meta name="description" content="Write what happened to your money in English or Roman Urdu. Zero Before 30 records it: expenses, salary, money lent and borrowed. Private beta signup open." />
 <meta property="og:title" content="Zero Before 30" />
 <meta property="og:description" content="Describe your money in your own words. We record it. Private beta signup open." />
 <meta property="og:url" content="https://zerobefore30.com" />
 <link rel="manifest" href="/manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet" />
 <style>
-:root{--bg:#f4f4f1;--ink:#111;--muted:#5d5d58;--card:#fff;--line:#e2e2dc;--accent:#111;--accent-ink:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#141414;--ink:#f2f2ee;--muted:#a3a39c;--card:#1d1d1d;--line:#2d2d2d;--accent:#f2f2ee;--accent-ink:#111}}
+:root{--deep:#0C1F1A;--deep2:#16342B;--dline:#2B4A3F;--on:#EAF2EC;--onm:#A9C0B4;--lime:#C8F169;--ground:#F2F4EF;--ink:#10201B;--muted:#51635B;--line:#DDE3DC;--card:#fff;--green:#3B6B2A;
+--display:"Bricolage Grotesque","DM Sans",system-ui,sans-serif;--body:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.wrap{max-width:760px;margin:0 auto;padding:0 20px}
-header{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
-.brand{font-weight:800;letter-spacing:.08em;font-size:13px}
-header a.signin{color:var(--ink);font-size:15px;text-decoration:none;border:1px solid var(--line);padding:8px 14px;border-radius:999px}
-h1{font-size:clamp(34px,7vw,56px);line-height:1.08;margin:36px 0 16px;letter-spacing:-.02em}
-h2{font-size:26px;margin:0 0 14px;letter-spacing:-.01em}
-.lead{font-size:19px;color:var(--muted);margin:0 0 28px;max-width:34em}
-section{padding:36px 0;border-top:1px solid var(--line)}
-.chat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:grid;gap:10px;margin:8px 0 4px}
-.row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
-.said{font-weight:600}
-.got{color:var(--muted);font-size:15px}
-.steps{display:grid;gap:14px;padding:0;margin:0;list-style:none;counter-reset:s}
-.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 16px 56px;position:relative}
-.steps li:before{content:counter(s);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:14px}
-ul.plain{padding-left:20px;margin:0}
-ul.plain li{margin:6px 0}
-form{display:grid;gap:10px;margin-top:14px}
-input,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;width:100%}
-button{font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:14px 18px;cursor:pointer}
-button:disabled{opacity:.6}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ground);color:var(--ink);font:17px/1.55 var(--body)}
+a{color:inherit}
+.w{max-width:1160px;margin:0 auto}
+.pad{padding-left:24px;padding-right:24px}
+.dark{background:var(--deep);color:var(--on)}
+.eyebrow{margin:0 0 14px;font-size:13px;letter-spacing:.12em;font-weight:700;color:var(--green)}
+.dark .eyebrow{color:var(--lime)}
+h1,h2{font-family:var(--display);font-weight:800;letter-spacing:-.03em;margin:0}
+h1{font-size:clamp(42px,6.4vw,76px);line-height:1.02;margin-bottom:24px}
+h2{font-size:clamp(32px,4.4vw,48px);line-height:1.08;margin-bottom:20px}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:26px 0;gap:16px;flex-wrap:wrap}
+.logo{font-family:var(--display);font-weight:800;letter-spacing:.14em;font-size:14px}
+.ghost{text-decoration:none;border:1px solid var(--dline);border-radius:999px;padding:11px 20px;font-weight:500;font-size:15px}
+.hero{display:flex;flex-wrap:wrap;gap:56px;align-items:center;padding:56px 0 96px}
+.hero-copy{flex:1 1 440px;min-width:0}
+.lead{margin:0 0 36px;font-size:20px;color:var(--onm);max-width:30em}
+.cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-block;text-decoration:none;background:var(--lime);color:var(--deep);font-weight:700;border-radius:14px;padding:16px 28px;font-size:17px;border:0;cursor:pointer;font-family:inherit;transition:transform .15s ease}
+.btn:hover{transform:translateY(-2px)}
+.link{text-decoration:none;padding:16px 8px;font-weight:500}
+/* phone */
+.phone{flex:0 1 330px;min-width:290px;margin:0 auto;background:var(--deep2);border:1px solid var(--dline);border-radius:40px;padding:12px;box-shadow:0 40px 80px rgba(0,0,0,.45);animation:float 6s ease-in-out infinite}
+.screen{background:var(--ground);border-radius:30px;padding:22px 18px 18px;color:var(--ink);min-height:470px}
+.lbl{margin:0;font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.big{margin:6px 0 2px;font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:-.02em}
+.fine{margin:0 0 16px;font-size:12px;color:var(--muted)}
+.input{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:56px}
+.typed{color:var(--ink);font-size:15px;min-height:1.4em}
+.caret{display:inline-block;width:2px;height:1em;background:var(--ink);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(2) infinite}
+.send{background:var(--deep);color:var(--lime);border-radius:10px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 32px}
+.card{margin:12px 0 0;background:#E7F4D1;border-radius:14px;padding:12px 14px;font-size:14px;opacity:0;transform:translateY(8px);transition:opacity .4s ease,transform .4s ease;color:#10201B}
+.card.on{opacity:1;transform:none}
+.card b{display:block}
+.card span{color:#3F5A33}
+.rows{margin-top:14px}
+.r{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.r small{display:block;font-size:12px;color:var(--muted)}
+.r.new{opacity:0;max-height:0;overflow:hidden;padding:0;border:0;transition:opacity .5s ease,max-height .5s ease,padding .5s ease}
+.r.new.on{opacity:1;max-height:70px;padding:10px 0;border-bottom:1px solid var(--line)}
+/* sections */
+section{padding:96px 24px}
+.sub{margin:0 0 48px;font-size:19px;color:var(--muted);max-width:36em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+.tile .k{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.08em}
+.tile .q{margin:0 0 14px;font-size:22px;font-weight:700;font-family:var(--display)}
+.tile p:last-child{margin:0;color:var(--muted)}
+.ur{font-family:"Noto Nastaliq Urdu",serif;font-weight:600;line-height:2}
+.split{display:flex;flex-wrap:wrap;gap:56px;align-items:center}
+.col{flex:1 1 380px;min-width:0}
+.dark p.t{margin:0 0 18px;font-size:19px;color:var(--onm)}
+.person{background:var(--deep2);border:1px solid var(--dline);border-radius:18px;padding:20px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.person .n{font-weight:700;font-size:18px}
+.person .d{color:var(--onm);font-size:15px}
+.person .a{text-align:right}
+.person .a small{display:block;font-size:12px;color:var(--onm)}
+.person .a strong{font-family:var(--display);font-weight:800;font-size:24px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.step{border-top:3px solid var(--ink);padding-top:20px}
+.step i{font-style:normal;display:block;font-family:var(--display);font-weight:800;font-size:40px;margin-bottom:8px}
+.step b{display:block;font-size:20px;margin-bottom:6px}
+.step p{margin:0;color:var(--muted)}
+.formcard{background:var(--ground);border:1px solid var(--line);border-radius:24px;padding:28px;display:flex;flex-direction:column;gap:12px}
+label{font-weight:700;font-size:15px}
+input,textarea{font:inherit;padding:14px 16px;border-radius:12px;border:1px solid #BFC9C1;background:#fff;color:var(--ink);width:100%}
+.formcard .btn{background:var(--deep);color:var(--lime);min-height:48px}
+.formcard .btn:disabled{opacity:.6}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 #msg{min-height:1.4em;font-size:15px}
-footer{padding:30px 0 50px;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
-.note{font-size:14px;color:var(--muted)}
+footer{padding:36px 24px;background:var(--deep);color:#8FA89B;font-size:14px}
+footer .w{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+footer b{font-family:var(--display);letter-spacing:.14em;color:var(--on)}
+/* motion */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+.rv.in{opacity:1;transform:none}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .phone{animation:none}.caret{animation:none}
+  .rv{opacity:1;transform:none;transition:none}
+  .card,.r.new{transition:none}
+}
+@media (prefers-color-scheme:dark){
+  :root{--ground:#0A1713;--ink:#EAF2EC;--muted:#9DB5A8;--line:#23403A;--card:#11241E;--green:#B7E27A}
+  .screen{background:#0A1713}.input{background:#11241E}
+  input,textarea{background:#11241E;border-color:#2F5649}
+  .formcard{background:#0F1F1A}.step{border-color:var(--ink)}
+  .formcard .btn{background:var(--lime);color:var(--deep)}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <span class="brand">ZERO BEFORE 30</span>
-    <a class="signin" href="/app">Open the app</a>
-  </header>
 
-  <h1>Tell it what happened to your money.</h1>
-  <p class="lead">Write it the way you would say it, in English or Roman Urdu. Zero Before 30 records it. No forms, no categories to pick, no spreadsheets.</p>
-  <p><a href="#beta"><button type="button">Join the private beta</button></a></p>
-
-  <section>
-    <h2>Say it. It's recorded.</h2>
-    <div class="chat" aria-label="Examples">
-      <div class="row"><span class="said">petrol 450 cash</span><span class="got">Expense, Rs 450, paid in cash</span></div>
-      <div class="row"><span class="said">salary 120000 aayi</span><span class="got">Income, Rs 120,000</span></div>
-      <div class="row"><span class="said">Ali ko 5000 diye</span><span class="got">Money lent to Ali, Rs 5,000</span></div>
-      <div class="row"><span class="said">Ali ne 2000 wapas kiye</span><span class="got">Ali paid back Rs 2,000, so he owes Rs 3,000</span></div>
-      <div class="row"><span class="said">HBL se cash 10000 nikale</span><span class="got">Transfer between your accounts, not an expense</span></div>
+<div class="dark pad">
+<div class="w">
+  <div class="nav">
+    <span class="logo">ZERO BEFORE 30</span>
+    <a class="ghost" href="/app">Open the app</a>
+  </div>
+  <div class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">PRIVATE BETA · PAKISTAN</p>
+      <h1>Tell it what happened to your money.</h1>
+      <p class="lead">Write it the way you'd say it, in English or Roman Urdu. Z30 records it, and keeps track of who owes you, who you owe, and what's left of your salary.</p>
+      <div class="cta">
+        <a class="btn" href="#beta">Request an invite</a>
+        <a class="link" href="#how">See how it works →</a>
+      </div>
     </div>
-    <p class="note">Examples of how the beta interprets entries. If something is unclear, such as "Amjad 4800", it asks instead of guessing.</p>
-  </section>
-
-  <section>
-    <h2>Why it's different from a budgeting app</h2>
-    <p>Most money in a salary earner's life is not just "spending". It's money lent to a friend, borrowed from a cousin, cash taken out of the bank, a repayment coming back. Z30 treats each of these as what it really is, so you can always see who owes you, who you owe, and what is left of your income.</p>
-    <ul class="plain">
-      <li>Expenses and income</li>
-      <li>Money you lent, and money you borrowed, tracked person by person</li>
-      <li>Repayments linked to the original loan</li>
-      <li>Transfers between your own accounts, kept out of your spending</li>
-      <li>Fix a mistake or undo an entry; nothing is silently erased</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>How it works</h2>
-    <ol class="steps">
-      <li><strong>You write one line.</strong> Any mix of English, Roman Urdu or Urdu.</li>
-      <li><strong>Z30 understands it.</strong> If one important detail is missing, it asks one short question.</li>
-      <li><strong>It's recorded and you can undo it.</strong> Your balances and totals come from your recorded entries, not from guesses.</li>
-    </ol>
-  </section>
-
-  <section>
-    <h2>Where it is today</h2>
-    <p>Z30 is in a small private beta. It works in your browser on your phone or computer and can be added to your home screen. English and Roman Urdu work today; Urdu script is still being tested and may make mistakes. We are looking for people who will use it for real and tell us what is wrong.</p>
-    <p class="note">Your entries are private to your account. No payment details are asked for.</p>
-  </section>
-
-  <section id="beta">
-    <h2>Join the private beta</h2>
-    <p>Leave your email. We'll send you an invite when your place opens. We will use your email only for the beta.</p>
-    <form id="f" novalidate>
-      <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
-      <input type="email" name="email" placeholder="Your email" required autocomplete="email" />
-      <input type="text" name="name" placeholder="Your name (optional)" autocomplete="name" maxlength="100" />
-      <textarea name="note" rows="3" maxlength="500" placeholder="How do you keep track of money today? (optional)"></textarea>
-      <button id="b" type="submit">Request an invite</button>
-      <div id="msg" role="status"></div>
-    </form>
-  </section>
-
-  <footer>Zero Before 30 · Made in Pakistan · <a href="/app" style="color:inherit">Open the app</a></footer>
+    <div class="phone" aria-hidden="true">
+      <div class="screen">
+        <p class="lbl">REMAINING FROM RECORDED INCOME</p>
+        <p class="big">PKR <span id="bal">84,250</span></p>
+        <p class="fine">Example figures for illustration</p>
+        <div class="input"><span class="typed"><span id="typed"></span><span class="caret"></span></span><span class="send">↑</span></div>
+        <div class="card" id="card"><b>Lent to Ali · Rs 5,000</b><span>Ali now owes you Rs 5,000</span></div>
+        <div class="rows">
+          <div class="r new" id="newrow"><span><b>Lent to Ali</b><small>lent · Ali</small></span><b>Rs 5,000</b></div>
+          <div class="r"><span><b>Petrol</b><small>expense · cash</small></span><b>− Rs 450</b></div>
+          <div class="r"><span><b>Salary</b><small>income · HBL</small></span><b style="color:#2F6B3C">+ Rs 120,000</b></div>
+          <div class="r" style="border:0"><span><b>HBL → Cash</b><small>transfer · not an expense</small></span><b>Rs 10,000</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+</div>
+
+<section>
+<div class="w">
+  <p class="eyebrow rv">WRITE IT, DON'T FILL IT IN</p>
+  <h2 class="rv" style="max-width:16em">No forms. No category menus. One line.</h2>
+  <p class="sub rv">Most finance apps want you to open a form for every coffee. Z30 reads a sentence and does the rest. If something important is unclear, it asks one short question instead of guessing.</p>
+  <div class="grid">
+    <div class="tile rv"><p class="k">YOU WRITE</p><p class="q">petrol 450 cash</p><p>Expense, Rs 450, paid in cash. Today's date.</p></div>
+    <div class="tile rv"><p class="k">YOU WRITE</p><p class="q">Ali ne 2000 wapas kiye</p><p>Ali paid back Rs 2,000, linked to the original loan. He owes you the rest.</p></div>
+    <div class="tile rv"><p class="k">YOU WRITE</p><p class="q">HBL se cash 10000 nikale</p><p>A transfer between your own accounts. Not counted as spending.</p></div>
+    <div class="tile rv"><p class="k">اردو میں بھی</p><p class="q ur" dir="rtl">پیٹرول ۴۵۰ نقد</p><p>Urdu script is still in testing and may make mistakes during the beta.</p></div>
+    <div class="tile rv"><p class="k">WHEN IT'S UNCLEAR</p><p class="q">Amjad 4800</p><p>Z30 asks: did you lend, borrow, or pay him? It won't guess with your money.</p></div>
+    <div class="tile rv"><p class="k">MADE A MISTAKE</p><p class="q">Tap Undo</p><p>Entries are never silently erased. A corrected or deleted entry stays in your history.</p></div>
+  </div>
+</div>
+</section>
+
+<section class="dark">
+<div class="w split">
+  <div class="col">
+    <p class="eyebrow rv">NOT JUST A BUDGET</p>
+    <h2 class="rv">Your money has people in it.</h2>
+    <p class="t rv">Salary earners lend to friends, borrow from cousins, take cash out of the bank, wait for repayments. Z30 treats each of these as what it really is, so your totals aren't wrong and you always know who owes whom.</p>
+    <p class="t rv">Your balances are calculated from your recorded entries, not from guesses.</p>
+  </div>
+  <div class="col">
+    <div class="person rv"><div><div class="n">Ali</div><div class="d">lent Rs 5,000 · paid back Rs 2,000</div></div><div class="a"><small>owes you</small><strong style="color:var(--lime)">Rs <span data-count="3000">3,000</span></strong></div></div>
+    <div class="person rv"><div><div class="n">Bilal</div><div class="d">borrowed Rs 8,000 · not yet repaid</div></div><div class="a"><small>you owe</small><strong>Rs <span data-count="8000">8,000</span></strong></div></div>
+    <p style="margin:4px 0 0;font-size:13px;color:#8FA89B">Example people and amounts for illustration.</p>
+  </div>
+</div>
+</section>
+
+<section id="how">
+<div class="w">
+  <p class="eyebrow rv">HOW IT WORKS</p>
+  <h2 class="rv" style="margin-bottom:44px">Three steps, about five seconds.</h2>
+  <div class="steps">
+    <div class="step rv"><i>1</i><b>You write one line</b><p>In English, Roman Urdu or Urdu. Any mix.</p></div>
+    <div class="step rv"><i>2</i><b>Z30 understands it</b><p>If one important detail is missing, it asks one short question.</p></div>
+    <div class="step rv"><i>3</i><b>It's recorded, and undoable</b><p>Your totals and balances update from your recorded entries.</p></div>
+  </div>
+</div>
+</section>
+
+<section id="beta" style="border-top:1px solid var(--line)">
+<div class="w split" style="align-items:flex-start">
+  <div class="col">
+    <p class="eyebrow rv">WHERE IT IS TODAY</p>
+    <h2 class="rv">A small, honest beta.</h2>
+    <p class="rv" style="font-size:18px;color:var(--muted);margin:0 0 14px">Z30 runs in your browser and can be added to your home screen. English and Roman Urdu work today; Urdu script is still being tested. We're looking for people who will use it for real and tell us what's wrong.</p>
+    <p class="rv" style="font-size:16px;color:var(--muted);margin:0">Your entries are private to your account. No payment details are asked for.</p>
+  </div>
+  <div class="col">
+    <form id="f" class="formcard rv" novalidate>
+      <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+      <label for="em">Email</label>
+      <input id="em" type="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+      <label for="nm">Name (optional)</label>
+      <input id="nm" type="text" name="name" autocomplete="name" maxlength="100" />
+      <label for="nt">How do you keep track of money today? (optional)</label>
+      <textarea id="nt" name="note" rows="3" maxlength="500"></textarea>
+      <button id="b" class="btn" type="submit">Request an invite</button>
+      <div id="msg" role="status"></div>
+      <p style="margin:0;font-size:13px;color:var(--muted)">We use your email only for the beta.</p>
+    </form>
+  </div>
+</div>
+</section>
+
+<footer><div class="w"><b>ZERO BEFORE 30</b><span>Made in Pakistan · zerobefore30.com · <a href="/app">Open the app</a></span></div></footer>
+
 <script>
+(function(){
+  var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // scroll reveal
+  var rv=[].slice.call(document.querySelectorAll('.rv'));
+  if(reduce||!('IntersectionObserver' in window)){rv.forEach(function(e){e.classList.add('in')})}
+  else{
+    var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target);var c=x.target.querySelectorAll('[data-count]');c.forEach(count)}})},{threshold:.15});
+    rv.forEach(function(e){io.observe(e)});
+  }
+  function count(el){
+    if(reduce)return;var to=+el.getAttribute('data-count'),t0=null;
+    function s(t){if(!t0)t0=t;var p=Math.min((t-t0)/900,1);el.textContent=Math.round(to*(1-Math.pow(1-p,3))).toLocaleString('en-PK');if(p<1)requestAnimationFrame(s)}
+    requestAnimationFrame(s);
+  }
+  // hero typing demo
+  var typed=document.getElementById('typed'),card=document.getElementById('card'),row=document.getElementById('newrow'),bal=document.getElementById('bal');
+  var lines=[{t:'Ali ko 5000 diye',a:'Lent to Ali · Rs 5,000',b:'Ali now owes you Rs 5,000',r:'Lent to Ali',s:'lent · Ali',m:'Rs 5,000'},
+             {t:'petrol 450 cash',a:'Expense · Rs 450',b:'Paid in cash, today',r:'Petrol',s:'expense · cash',m:'− Rs 450'}];
+  if(reduce){typed.textContent=lines[0].t;card.classList.add('on');row.classList.add('on');return}
+  var i=0;
+  function run(){
+    var L=lines[i%lines.length];i++;
+    card.classList.remove('on');row.classList.remove('on');typed.textContent='';
+    var k=0;
+    (function type(){
+      if(k<=L.t.length){typed.textContent=L.t.slice(0,k++);setTimeout(type,70)}
+      else setTimeout(function(){
+        typed.textContent='';
+        card.querySelector('b').textContent=L.a;card.querySelector('span').textContent=L.b;
+        row.querySelector('span b').textContent=L.r;row.querySelector('small').textContent=L.s;row.children[1].textContent=L.m;
+        card.classList.add('on');row.classList.add('on');
+        setTimeout(run,3800);
+      },500);
+    })();
+  }
+  setTimeout(run,900);
+})();
 (function(){
   var f=document.getElementById('f'),m=document.getElementById('msg'),b=document.getElementById('b');
   f.addEventListener('submit',function(e){
